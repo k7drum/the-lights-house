@@ -1,7 +1,10 @@
+// app/frontend/layout.tsx
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import Navbar from "@/components/Navbar"; // ✅ Import Navbar Here
+import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
+import { ReactNode } from "react";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -18,16 +21,18 @@ export const metadata: Metadata = {
   description: "A Place of Hope & Faith",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function FrontendLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <head>
         <meta name="description" content="A Place of Hope & Faith" />
       </head>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-black text-white flex flex-col min-h-screen`}>
-        {/* ✅ Navbar is now globally included here */}
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-black text-white flex flex-col min-h-screen`}
+      >
         <Navbar />
-        {children}
+        <main className="flex-grow">{children}</main>
+        <Footer />
       </body>
     </html>
   );

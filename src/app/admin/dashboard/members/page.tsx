@@ -7,6 +7,7 @@ import { saveAs } from "file-saver";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
+import { getAuth } from "firebase/auth";
 
 export default function MembersPage() {
   const [members, setMembers] = useState<any[]>([]);
@@ -20,10 +21,24 @@ export default function MembersPage() {
     homecell: "",
   });
   const [saving, setSaving] = useState(false);
+  const [userRole, setUserRole] = useState("member");
 
   useEffect(() => {
+    const fetchRole = async () => {
+      const auth = getAuth();
+      const user = auth.currentUser;
+      if (!user) return;
+  
+      const docSnap = await getDoc(doc(db, "users", user.uid));
+      if (docSnap.exists()) {
+        setUserRole(docSnap.data().role || "member");
+      }
+    };
+    fetchRole();
     fetchMembers();
   }, []);
+
+  
 
 // ✅ Fetch Members from Firestore
 const fetchMembers = async () => {
@@ -182,7 +197,7 @@ const saveMember = async () => {
             className="p-2 bg-gray-700 rounded"
           >
             <option value="member">Member</option>
-            <option value="leader">Leader</option>
+            {userRole === "admin" && <option value="leader">Leader</option>}
             <option value="pastor">Pastor</option>
             <option value="co-admin">Co-Admin</option>
             <option value="admin">Admin</option>

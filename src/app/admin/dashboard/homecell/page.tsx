@@ -4,11 +4,14 @@ import { db } from "@/config/firebaseConfig";
 import { collection, addDoc, getDocs, updateDoc, deleteDoc, doc } from "firebase/firestore";
 import { Trash2, Edit, Plus, Download } from "lucide-react";
 import * as XLSX from "xlsx";
+import { useAuth } from "@/hooks/useAuth";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
+import Link from "next/link";
 
 export default function HomecellManagement() {
   const [homecells, setHomecells] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
   const [editingHomecell, setEditingHomecell] = useState<any>(null);
   const [newHomecell, setNewHomecell] = useState({
     name: "",
@@ -20,18 +23,36 @@ export default function HomecellManagement() {
 
   useEffect(() => {
     fetchHomecells();
+    fetchUsers();
   }, []);
 
   // ✅ Fetch Homecell Groups from Firestore
   const fetchHomecells = async () => {
     try {
-      const querySnapshot = await getDocs(collection(db, "homecells"));
-      const homecellList = querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      const homecellSnapshot = await getDocs(collection(db, "homecells"));
+      const userSnapshot = await getDocs(collection(db, "users"));
+  
+      const users = userSnapshot.docs.map((doc) => doc.data());
+  
+      const homecellList = homecellSnapshot.docs.map((doc) => {
+        const data = doc.data();
+        const memberCount = users.filter(
+          (user) => user.homecell === data.name
+        ).length;
+  
+        return {
+          id: doc.id,
+          ...data,
+          membersCount: memberCount,
+        };
+      });
+  
       setHomecells(homecellList);
     } catch (error) {
       console.error("Error fetching homecells:", error);
     }
   };
+  
 
   // ✅ Save or Update Homecell
   const saveHomecell = async () => {
@@ -67,6 +88,19 @@ export default function HomecellManagement() {
     } catch (error) {
       console.error("Error saving homecell:", error);
       alert("Failed to save homecell.");
+    }
+  };
+
+  const fetchUsers = async () => {
+    try {
+      const userSnapshot = await getDocs(collection(db, "users"));
+      const userList = userSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setUsers(userList);
+    } catch (error) {
+      console.error("Error fetching users:", error);
     }
   };
 
@@ -132,13 +166,19 @@ export default function HomecellManagement() {
             onChange={(e) => setNewHomecell({ ...newHomecell, name: e.target.value })}
             className="p-2 bg-gray-700 rounded"
           />
-          <input
-            type="text"
-            placeholder="Leader"
+          <select
             value={newHomecell.leader}
             onChange={(e) => setNewHomecell({ ...newHomecell, leader: e.target.value })}
             className="p-2 bg-gray-700 rounded"
-          />
+          >
+            <option value="">Select a Leader</option>
+            {users.map((user) => (
+              <option key={user.id} value={user.name}>
+                {user.name} ({user.role})
+              </option>
+            ))}
+          </select>
+
           <input
             type="text"
             placeholder="Location"
@@ -146,16 +186,6 @@ export default function HomecellManagement() {
             onChange={(e) => setNewHomecell({ ...newHomecell, location: e.target.value })}
             className="p-2 bg-gray-700 rounded"
           />
-          <div>
-            <label className="text-gray-400 block mb-1">Number of Members</label>
-            <input
-              type="number"
-              placeholder="Number of Members"
-              value={newHomecell.membersCount}
-              onChange={(e) => setNewHomecell({ ...newHomecell, membersCount: Number(e.target.value) })}
-              className="p-2 bg-gray-700 rounded w-full"
-            />
-          </div>
         </div>
 
         {/* ✅ Manual Bookkeeping Notes */}
@@ -198,6 +228,10 @@ export default function HomecellManagement() {
                   <button onClick={() => deleteHomecell(homecell.id)} className="text-red-500">
                     <Trash2 />
                   </button>
+                  <Link href={`/admin/dashboard/homecell/${homecell.name}`}>
+                    <button className="text-white underline">View Members</button>
+                  </Link>
+
                 </td>
               </tr>
             ))}

@@ -13,6 +13,9 @@ export default function MenuManager() {
   const [submenuData, setSubmenuData] = useState({ name: "", path: "" });
   const [selectedMenu, setSelectedMenu] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [editingMenuId, setEditingMenuId] = useState(null);
+  const [editingSubmenuIndex, setEditingSubmenuIndex] = useState(null);
+
 
   useEffect(() => {
     fetchMenus();
@@ -36,20 +39,78 @@ export default function MenuManager() {
     fetchMenus();
   };
 
-  // ✅ Add Submenu
-  const addSubmenu = async () => {
-    if (!submenuData.name || !submenuData.path || !selectedMenu) return;
-    const menuRef = doc(db, "menus", selectedMenu);
-    const updatedMenus = menus.map((menu) =>
-      menu.id === selectedMenu ? { ...menu, submenus: [...menu.submenus, submenuData] } : menu
-    );
-    await updateDoc(menuRef, {
-      submenus: updatedMenus.find((menu) => menu.id === selectedMenu).submenus,
-    });
+  const updateMenu = async () => {
+    if (!editingMenuId || !menuData.name || !menuData.path) return;
+  
+    try {
+      const menuRef = doc(db, "menus", editingMenuId);
+      await updateDoc(menuRef, {
+        name: menuData.name,
+        path: menuData.path,
+      });
+  
+      setEditingMenuId(null);
+      setMenuData({ name: "", path: "", order: 0 });
+      fetchMenus();
+    } catch (error) {
+      console.error("Error updating menu:", error);
+    }
+  };
+  
 
+  // ✅ Add Submenu
+  const addOrUpdateSubmenu = async () => {
+    if (!submenuData.name || !submenuData.path || !selectedMenu) return;
+  
+    const menuRef = doc(db, "menus", selectedMenu);
+    const menu = menus.find((m) => m.id === selectedMenu);
+    if (!menu) return;
+  
+    const updatedSubmenus = [...menu.submenus];
+  
+    if (editingSubmenuIndex !== null) {
+      // Update existing submenu
+      updatedSubmenus[editingSubmenuIndex] = submenuData;
+    } else {
+      // Add new submenu
+      updatedSubmenus.push(submenuData);
+    }
+  
+    await updateDoc(menuRef, { submenus: updatedSubmenus });
+  
     setSubmenuData({ name: "", path: "" });
+    setEditingSubmenuIndex(null);
     fetchMenus();
   };
+  
+
+    const editSubmenu = (menuId, index) => {
+      const menu = menus.find((m) => m.id === menuId);
+      if (!menu) return;
+    
+      const submenu = menu.submenus[index];
+      if (!submenu) return;
+    
+      setSelectedMenu(menuId);
+      setSubmenuData(submenu);
+      setEditingSubmenuIndex(index);
+    };
+
+
+    // ✅ Delete Submenu
+    const deleteSubmenu = async (menuId, indexToDelete) => {
+      if (!confirm("Are you sure you want to delete this submenu?")) return;
+    
+      const menu = menus.find((m) => m.id === menuId);
+      if (!menu) return;
+    
+      const updatedSubmenus = menu.submenus.filter((_, index) => index !== indexToDelete);
+      await updateDoc(doc(db, "menus", menuId), { submenus: updatedSubmenus });
+      fetchMenus();
+    };
+    
+
+  
 
   // ✅ Save Menu Order
   const saveMenuOrder = async () => {
@@ -118,9 +179,22 @@ export default function MenuManager() {
           onChange={(e) => setMenuData({ ...menuData, path: e.target.value })}
           className="p-2 bg-gray-700 rounded w-1/3"
         />
-        <button onClick={addMenu} className="px-4 py-2 bg-blue-500 text-white rounded">
-          <PlusCircle className="mr-2" /> Add Menu
-        </button>
+        {editingMenuId ? (
+          <button
+            onClick={updateMenu}
+            className="px-4 py-2 bg-yellow-500 text-black rounded"
+          >
+            <Save className="mr-2" /> Update Menu
+          </button>
+        ) : (
+          <button
+            onClick={addMenu}
+            className="px-4 py-2 bg-blue-500 text-white rounded"
+          >
+            <PlusCircle className="mr-2" /> Add Menu
+          </button>
+        )}
+
       </div>
 
       {/* ✅ Add New Submenu */}
@@ -150,9 +224,14 @@ export default function MenuManager() {
           onChange={(e) => setSubmenuData({ ...submenuData, path: e.target.value })}
           className="p-2 bg-gray-700 rounded w-1/3"
         />
-        <button onClick={addSubmenu} className="px-4 py-2 bg-green-500 text-white rounded">
-          <PlusCircle className="mr-2" /> Add Submenu
+        <button
+          onClick={addOrUpdateSubmenu}
+          className={`px-4 py-2 ${editingSubmenuIndex !== null ? "bg-yellow-500" : "bg-green-500"} text-white rounded`}
+        >
+          <PlusCircle className="mr-2" />
+          {editingSubmenuIndex !== null ? "Update Submenu" : "Add Submenu"}
         </button>
+
       </div>
 
       {/* ✅ Menu List with Drag & Drop */}
@@ -176,11 +255,50 @@ export default function MenuManager() {
                       {menu.name}
                     </td>
                     <td className="p-3">{menu.path}</td>
-                    <td className="p-3">{menu.submenus?.map(sub => sub.name).join(", ") || "No submenus"}</td>
+                    <td className="p-3 space-y-1">
+                      {menu.submenus && menu.submenus.length > 0 ? (
+                        menu.submenus.map((sub, index) => (
+                          <div key={index} className="flex items-center justify-between">
+                            <span>{sub.name}</span>
+                            <div className="space-x-2">
+                              <button
+                                onClick={() => editSubmenu(menu.id, index)}
+                                className="text-sm text-yellow-400 hover:underline"
+                              >
+                                ✏️ Edit
+                              </button>
+                              <button
+                                onClick={() => deleteSubmenu(menu.id, index)}
+                                className="text-sm text-red-500 hover:underline"
+                              >
+                                🗑 Delete
+                              </button>
+                            </div>
+                          </div>
+
+                        ))
+                      ) : (
+                        <span>No submenus</span>
+                      )}
+                    </td>
+
                     <td className="p-3 flex justify-center">
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => {
+                          setEditingMenuId(menu.id);
+                          setMenuData({ name: menu.name, path: menu.path, order: menu.order });
+                        }}
+                        className="text-yellow-400"
+                      >
+                        ✏️
+                      </button>
                       <button onClick={() => deleteMenu(menu.id)} className="text-red-500">
                         <Trash2 />
                       </button>
+                    </div>
+
+
                     </td>
                   </SortableItem>
                 ))}

@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import Image from "next/image";
 import { signOut } from "firebase/auth";
 import { auth } from "@/config/firebaseConfig";
@@ -54,6 +54,7 @@ const sidebarItems = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter(); // ✅ added
   const [user, setUser] = useState(null);
   const [isOpen, setIsOpen] = useState(false); // For mobile menu toggle
 
@@ -65,10 +66,16 @@ export default function Sidebar() {
     return () => unsubscribe();
   }, []);
 
-  // ✅ Logout function
-  const handleLogout = async () => {
+  // ✅ Logout function with redirect
+const handleLogout = async () => {
+  try {
     await signOut(auth);
-  };
+    router.push("/"); // 👈 Change to "/auth/login" if you prefer login page
+  } catch (error) {
+    console.error("Logout error:", error);
+  }
+};
+
 
   return (
     <>
