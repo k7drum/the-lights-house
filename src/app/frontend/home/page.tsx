@@ -29,6 +29,7 @@ interface MyEvent {
 }
 
 export default function HomePage() {
+  // ── Banner state ──
   const [banner, setBanner] = useState({
     title: "Welcome to The Light's House",
     subtitle: "A place of faith and transformation",
@@ -150,10 +151,18 @@ export default function HomePage() {
 
   return (
     <div className="bg-black text-white">
-      {/* Hero Section */}
-      <motion.section className="relative h-screen flex items-center justify-center text-center overflow-hidden">
+      
+      {/* ── Hero Section / Header Banner ── */}
+      <motion.section
+        className="relative h-screen flex items-center justify-center text-center overflow-hidden"
+      >
         {banner.mediaType === "video" ? (
-          <video autoPlay loop muted className="absolute inset-0 object-cover w-full h-full">
+          <video
+            autoPlay
+            loop
+            muted
+            className="absolute inset-0 object-cover w-full h-full"
+          >
             <source src={banner.mediaUrl} />
           </video>
         ) : (
@@ -162,10 +171,28 @@ export default function HomePage() {
             style={{ backgroundImage: `url(${banner.mediaUrl})` }}
           />
         )}
+
+        {/* Dark overlay so the text is legible */}
         <div className="absolute inset-0 bg-black bg-opacity-60" />
+
+        {/* Centered text/content */}
         <div className="z-10 px-4 max-w-4xl">
-          <motion.h1 className="text-5xl md:text-6xl font-bold mb-4">{banner.title}</motion.h1>
-          <motion.p className="text-lg md:text-xl text-gray-300 mb-6">{banner.subtitle}</motion.p>
+          <motion.h1
+            className="text-5xl md:text-6xl font-bold mb-4"
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+          >
+            {banner.title}
+          </motion.h1>
+          <motion.p
+            className="text-lg md:text-xl text-gray-300 mb-6"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+          >
+            {banner.subtitle}
+          </motion.p>
           <Link href="/frontend/livestream">
             <button className="px-6 py-3 bg-yellow-500 text-black font-bold rounded-lg hover:bg-yellow-600 transition">
               Watch Online
@@ -173,6 +200,8 @@ export default function HomePage() {
           </Link>
         </div>
       </motion.section>
+      {/* ──────────────────────────────────────── */}
+
 
       {/* Live Stream + Quick Actions */}
       <section className="px-6 py-20 bg-gradient-to-br from-gray-900 to-gray-800">
@@ -242,6 +271,76 @@ export default function HomePage() {
           </div>
         </div>
       )}
+
+
+      {/* ── Two-Column “About & Vision” + Pastor Photo (full-width image) ── */}
+      <motion.section
+        className="py-16 bg-gray-800 text-white"
+        initial={{ opacity: 0, y: 40 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8 }}
+      >
+        <div className="max-w-6xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 gap-12 items-start">
+          {/* Left: Description & Vision */}
+          <motion.div
+            className="space-y-6"
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.2, duration: 0.6 }}
+          >
+            <h2 className="text-4xl font-bold">Our Vision & Mission</h2>
+            <p className="text-gray-300 leading-relaxed">
+              At The Light’s House Church, we believe in transforming lives through the power 
+              of grace, community, and heartfelt worship. Our mission is to share Jesus’s 
+              message of hope, compassion, and renewal—reaching every generation, restoring 
+              every heart, and equipping every believer to live a life of purpose. We are 
+              committed to creating an environment where you can grow in faith, find genuine 
+              friendships, and discover your unique calling.
+            </p>
+            <ul className="list-disc list-inside text-gray-300 space-y-2">
+              <li>
+                <strong>Authentic Worship:</strong> Encounter God through worship that’s 
+                heartfelt and unashamed.
+              </li>
+              <li>
+                <strong>Radical Compassion:</strong> Serve our community and extend 
+                God’s love to those in need.
+              </li>
+              <li>
+                <strong>Life-Changing Teaching:</strong> Bible-centered messages that 
+                inspire transformation.
+              </li>
+            </ul>
+            <Link href="/frontend/what-we-believe">
+              <button className="mt-4 px-6 py-3 bg-yellow-500 text-black font-semibold rounded-lg hover:bg-yellow-600 transition">
+                Learn More About Us
+              </button>
+            </Link>
+          </motion.div>
+
+          {/* Right: Pastor Photo (full-width) */}
+          <motion.div
+            className="flex justify-center md:justify-end"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.4, duration: 0.6 }}
+          >
+            <div className="w-full max-w-md overflow-hidden rounded-2xl shadow-2xl">
+              <Image
+                src="/images/pastor.png"
+                alt="Pastor [Name]"
+                width={800}
+                height={1000}
+                className="object-cover w-full h-full"
+                placeholder="blur"
+                blurDataURL="/images/pastor-blur.jpg"
+              />
+            </div>
+          </motion.div>
+        </div>
+      </motion.section>
+      {/* ──────────────────────────────────────────────────────── */}
+
 
       {/* Upcoming Events */}
       <motion.section className="py-16 bg-gray-900"
