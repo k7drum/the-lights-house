@@ -1,28 +1,49 @@
+// src/hooks/useFetchSermons.ts
+
 import { useEffect, useState } from "react";
 import { db } from "@/config/firebaseConfig";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, DocumentData } from "firebase/firestore";
 import dayjs from "dayjs";
 
+interface Sermon {
+  id: string;
+  date: string;
+  title?: string;
+  content?: string;
+  speaker?: string;
+  fileUrl?: string;
+  // ...any other known fields
+  [key: string]: any;
+}
+
 export const useFetchSermons = () => {
-  const [sermons, setSermons] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [sermons, setSermons] = useState<Sermon[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>("");
 
   useEffect(() => {
-    const fetch = async () => {
+    async function fetchSermons() {
       try {
         const snap = await getDocs(collection(db, "sermons"));
-        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        list.sort((a, b) => dayjs(b.date).diff(dayjs(a.date)));
-        setSermons(list);
+
+        // Map and cast to Sermon[] to satisfy TS
+        const list = snap.docs
+          .map((d) => ({
+            id: d.id,
+            ...(d.data() as DocumentData),
+          }))
+          .sort((a, b) => dayjs((b.date as string)).diff(dayjs(a.date as string)));
+
+        setSermons(list as Sermon[]);
       } catch (err) {
+        console.error("Error loading sermons:", err);
         setError("Failed to load sermons.");
       } finally {
         setLoading(false);
       }
-    };
+    }
 
-    fetch();
+    fetchSermons();
   }, []);
 
   return { sermons, loading, error };

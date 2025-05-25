@@ -5,40 +5,43 @@ import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, Timestamp, quer
 import { useRouter } from "next/navigation";
 import { Save, Edit, Trash2, ArrowLeft, RefreshCw } from "lucide-react";
 
+// ✅ Define the type
+type Announcement = {
+  id: string;
+  title: string;
+  message: string;
+  expiryDate: { seconds: number; nanoseconds: number };
+  targetAudience: string;
+  status: string;
+  createdAt: any;
+};
+
 export default function AnnouncementsPage() {
-  const [announcements, setAnnouncements] = useState([]);
-  const [expiredAnnouncements, setExpiredAnnouncements] = useState([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [expiredAnnouncements, setExpiredAnnouncements] = useState<Announcement[]>([]);
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
   const [expiryDate, setExpiryDate] = useState("");
   const [targetAudience, setTargetAudience] = useState("all");
   const [status, setStatus] = useState("draft");
   const [loading, setLoading] = useState(false);
-  const [editingId, setEditingId] = useState(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
     fetchAnnouncements();
   }, []);
 
-  // ✅ Fetch Announcements (with Debugging)
   const fetchAnnouncements = async () => {
     try {
-      console.log("Fetching announcements...");
       const q = query(collection(db, "announcements"), orderBy("expiryDate", "desc"));
       const querySnapshot = await getDocs(q);
-      
-      if (querySnapshot.empty) {
-        console.log("No announcements found in Firestore.");
-      }
-
       const now = new Date();
-      const allAnnouncements = querySnapshot.docs.map((doc) => ({
+
+      const allAnnouncements: Announcement[] = querySnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
-      }));
-
-      console.log("Fetched announcements:", allAnnouncements);
+      })) as Announcement[];
 
       setAnnouncements(allAnnouncements);
       setExpiredAnnouncements(allAnnouncements.filter((ann) => new Date(ann.expiryDate.seconds * 1000) <= now));
@@ -47,7 +50,6 @@ export default function AnnouncementsPage() {
     }
   };
 
-  // ✅ Save Announcement
   const saveAnnouncement = async () => {
     if (!title || !message || !expiryDate) {
       alert("All fields are required!");
@@ -82,8 +84,7 @@ export default function AnnouncementsPage() {
     }
   };
 
-  // ✅ Delete Announcement
-  const deleteAnnouncement = async (id) => {
+  const deleteAnnouncement = async (id: string) => {
     if (!confirm("Are you sure you want to delete this announcement?")) return;
     try {
       await deleteDoc(doc(db, "announcements", id));
@@ -94,8 +95,7 @@ export default function AnnouncementsPage() {
     }
   };
 
-  // ✅ Edit Announcement
-  const editAnnouncement = (announcement) => {
+  const editAnnouncement = (announcement: Announcement) => {
     setTitle(announcement.title);
     setMessage(announcement.message);
     setExpiryDate(new Date(announcement.expiryDate.seconds * 1000).toISOString().split("T")[0]);
@@ -104,7 +104,6 @@ export default function AnnouncementsPage() {
     setEditingId(announcement.id);
   };
 
-  // ✅ Reset Form
   const resetForm = () => {
     setTitle("");
     setMessage("");
@@ -116,7 +115,6 @@ export default function AnnouncementsPage() {
 
   return (
     <div className="p-6">
-      {/* ✅ Back & Refresh Buttons */}
       <div className="flex justify-between mb-4">
         <button onClick={() => router.back()} className="flex items-center text-gray-400 hover:text-white">
           <ArrowLeft className="mr-2" /> Back
@@ -128,7 +126,6 @@ export default function AnnouncementsPage() {
 
       <h1 className="text-3xl font-bold mb-4">Announcements</h1>
 
-      {/* ✅ Announcement Form */}
       <div className="bg-gray-800 p-4 rounded-lg shadow-md mb-6">
         <h2 className="text-xl font-semibold mb-2">{editingId ? "Edit Announcement" : "New Announcement"}</h2>
 
@@ -141,13 +138,11 @@ export default function AnnouncementsPage() {
         <label className="block text-gray-400">Expiry Date</label>
         <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} className="p-2 bg-gray-700 rounded w-full mb-2" />
 
-        {/* ✅ Save Button */}
         <button onClick={saveAnnouncement} disabled={loading} className="px-4 py-2 bg-green-600 text-white rounded-lg flex items-center">
           <Save className="mr-2" /> {loading ? "Saving..." : editingId ? "Update Announcement" : "Create Announcement"}
         </button>
       </div>
 
-      {/* ✅ List of Announcements */}
       <h2 className="text-xl font-semibold mb-2">Active Announcements</h2>
       <div className="space-y-2">
         {announcements.length === 0 ? (

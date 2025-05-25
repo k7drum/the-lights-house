@@ -1,3 +1,4 @@
+// src/app/frontend/home/page.tsx
 "use client";
 import { useEffect, useState } from "react";
 import { db } from "@/config/firebaseConfig";
@@ -9,26 +10,42 @@ import Image from "next/image";
 import relativeTime from "dayjs/plugin/relativeTime";
 dayjs.extend(relativeTime);
 
+interface Livestream {
+  id: string;
+  status: "live" | "offline" | string;
+  date: string;
+  videoURL?: string;
+  title?: string;
+  imageUrl?: string;
+  [key: string]: any;
+}
+
+interface MyEvent {
+  id: string;
+  date: string;
+  title?: string;
+  imageUrl?: string;
+  [key: string]: any;
+}
+
 export default function HomePage() {
   const [banner, setBanner] = useState({
     title: "Welcome to The Light's House",
     subtitle: "A place of faith and transformation",
-    mediaType: "image",
+    mediaType: "image" as "image" | "video",
     mediaUrl: "/default-banner.jpg",
   });
 
-  const [sermons, setSermons] = useState([]);
-  const [liveStream, setLiveStream] = useState(null);
-  const [events, setEvents] = useState([]);
-  const [blogs, setBlogs] = useState([]);
-  const [nextEvent, setNextEvent] = useState(null);
+  const [sermons, setSermons] = useState<any[]>([]);
+  const [liveStream, setLiveStream] = useState<Livestream | null>(null);
+  const [events, setEvents] = useState<MyEvent[]>([]);
+  const [blogs, setBlogs] = useState<any[]>([]);
+  const [nextEvent, setNextEvent] = useState<MyEvent | null>(null);
   const [countdown, setCountdown] = useState("");
-  const [latestSermonUrl, setLatestSermonUrl] = useState("");
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-
   useEffect(() => {
-    async function fetchAllData() {
+    async function fetchAll() {
       await Promise.all([
         fetchBanner(),
         fetchSermons(),
@@ -37,389 +54,252 @@ export default function HomePage() {
         fetchLiveStream(),
       ]);
     }
-  
-    fetchAllData();
+    fetchAll();
   }, []);
-  
 
   useEffect(() => {
-    if (nextEvent?.date) { // Add optional chaining
-      const interval = setInterval(() => {
-        const eventDate = dayjs(nextEvent.date);
-        const diff = eventDate.diff(dayjs());
-        if (diff <= 0) {
-          setCountdown("Event is live!");
-          clearInterval(interval);
-        } else {
-          setCountdown(eventDate.fromNow(true));
-        }
-      }, 1000);
-  
-      return () => clearInterval(interval);
-    }
+    if (!nextEvent?.date) return;
+    const iv = setInterval(() => {
+      const diff = dayjs(nextEvent.date).diff(dayjs());
+      if (diff <= 0) {
+        setCountdown("Event is live!");
+        clearInterval(iv);
+      } else {
+        setCountdown(dayjs(nextEvent.date).fromNow(true));
+      }
+    }, 1000);
+    return () => clearInterval(iv);
   }, [nextEvent]);
-  
 
-  const fetchBanner = async () => {
+  async function fetchBanner() {
     try {
-      const docRef = doc(db, "settings", "config");
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        setBanner(docSnap.data().homepageBanner);
+      const refDoc = doc(db, "settings", "config");
+      const snap = await getDoc(refDoc);
+      if (snap.exists()) {
+        setBanner((snap.data() as any).homepageBanner);
       }
-    } catch (error) {
-      console.error("Error fetching banner:", error);
+    } catch (err) {
+      console.error("fetchBanner:", err);
     }
-  };
+  }
 
-  const fetchLiveStream = async () => {
+  async function fetchLiveStream() {
     try {
-      const querySnapshot = await getDocs(collection(db, "livestreams"));
-      const list = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    
-      // Look for a live stream (or a fallback offline stream)
-      const liveStream = list.find(item => item.status === "live");
-      const latestPastStream = list
-        .filter(item => item.status === "offline")
+      const snap = await getDocs(collection(db, "livestreams"));
+      const list: Livestream[] = snap.docs.map(d => {
+        const { id: _omit, ...data } = d.data() as Livestream;
+        return { id: d.id, ...data };
+      });
+      const live = list.find(i => i.status === "live");
+      const past = list
+        .filter(i => i.status === "offline")
         .sort((a, b) => dayjs(b.date).diff(dayjs(a.date)))[0];
-  
-      // Log what you get from Firestore for debugging
-      console.log("Fetched livestream data:", liveStream || latestPastStream);
-      setLiveStream(liveStream || latestPastStream || null);
-    } catch (error) {
-      console.error("Error fetching livestream:", error);
+      setLiveStream(live || past || null);
+    } catch (err) {
+      console.error("fetchLiveStream:", err);
     }
-  };
-  
+  }
 
+  async function fetchSermons() {
+    try {
+      const snap = await getDocs(collection(db, "sermons"));
+      const list = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+      setSermons(list);
+    } catch (err) {
+      console.error("fetchSermons:", err);
+    }
+  }
 
-  const getEmbedUrl = (url: string) => {
+  async function fetchEvents() {
+    try {
+      const snap = await getDocs(collection(db, "events"));
+      const list: MyEvent[] = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+      setEvents(list);
+      const upcoming = list
+        .filter(e => dayjs(e.date).isAfter(dayjs()))
+        .sort((a, b) => dayjs(a.date).diff(dayjs(b.date)))[0];
+      setNextEvent(upcoming || null);
+    } catch (err) {
+      console.error("fetchEvents:", err);
+    }
+  }
+
+  async function fetchBlogs() {
+    try {
+      const snap = await getDocs(collection(db, "blogs"));
+      const list = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+      setBlogs(list);
+    } catch (err) {
+      console.error("fetchBlogs:", err);
+    }
+  }
+
+  function getEmbedUrl(url: string) {
     if (!url) return "";
-    try {
-      if (url.includes("youtube.com/watch?v=") || url.includes("youtu.be/")) {
-        // Handle both full and shortened URLs
-        const embedUrl = url.includes("youtu.be/")
-          ? url.replace("youtu.be/", "www.youtube.com/embed/")
-          : url.replace("watch?v=", "embed/");
-        return embedUrl + "?rel=0&modestbranding=1&controls=0&autoplay=1&mute=1";
-      }
-      
-      if (url.includes("vimeo.com")) {
-        const videoId = url.split("/").pop();
-        return `https://player.vimeo.com/video/${videoId}`;
-      }
-      return url; // fallback if no matching condition
-    } catch (error) {
-      console.error("Error creating embed URL:", error);
-      return "";
+    if (url.includes("youtu")) {
+      const id = url.includes("youtu.be/")
+        ? url.split("/").pop()
+        : new URL(url).searchParams.get("v");
+      return `https://www.youtube.com/embed/${id}?rel=0&autoplay=1&mute=1`;
     }
-  };
-  
-  
-  
-
-  const fetchSermons = async () => {
-    try {
-      const querySnapshot = await getDocs(collection(db, "sermons"));
-      const sermonList = querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setSermons(sermonList);
-      if (sermonList.length > 0) {
-        setLatestSermonUrl(sermonList[0].youtubeUrl);
-      }
-    } catch (error) {
-      console.error("Error fetching sermons:", error);
+    if (url.includes("vimeo")) {
+      return `https://player.vimeo.com/video/${url.split('/').pop()}`;
     }
-  };
-
-  const fetchEvents = async () => {
-    try {
-      const querySnapshot = await getDocs(collection(db, "events"));
-      const eventList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      if (Array.isArray(eventList)) {
-        setEvents(eventList);
-        const upcoming = eventList
-          .filter(e => dayjs(e.date).isAfter(dayjs()))
-          .sort((a, b) => dayjs(a.date).diff(dayjs(b.date)))[0];
-        setNextEvent(upcoming || null);
-      } else {
-        setEvents([]);
-        setNextEvent(null);
-        console.error("Events data is not an array:", eventList);
-      }
-    } catch (error) {
-      console.error("Error fetching events:", error);
-      setEvents([]);
-      setNextEvent(null);
-    }
-  };
-  
-
-  const fetchBlogs = async () => {
-    try {
-      const querySnapshot = await getDocs(collection(db, "blogs"));
-      const blogList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      if (Array.isArray(blogList)) {
-        setBlogs(blogList);
-      } else {
-        setBlogs([]);
-        console.error("Blogs data is not an array:", blogList);
-      }
-    } catch (error) {
-      console.error("Error fetching blogs:", error);
-      setBlogs([]);
-    }
-  };
-  
+    return url;
+  }
 
   return (
-    <div className="bg-black text-white min-h-screen">
-      {/* ✅ Hero Section */}
-      <motion.section className="relative h-screen flex items-center justify-center text-center overflow-hidden bg-fixed bg-center bg-cover">
-  {banner.mediaType === "video" ? (
-    <video autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover">
-      <source src={banner.mediaUrl} type="video/mp4" />
-    </video>
-  ) : (
-    <motion.div
-      className="absolute inset-0 bg-cover bg-center"
-      style={{ backgroundImage: `url(${banner.mediaUrl})` }}
-      initial={{ scale: 1.2 }}
-      animate={{ scale: 1 }}
-      transition={{ duration: 1.5 }}
-    />
-  )}
-
-  <div className="absolute inset-0 bg-black bg-opacity-60"></div>
-  
-  <div className="z-10 text-center px-4 max-w-4xl">
-    <motion.h1 className="text-5xl md:text-6xl font-bold text-white">
-      {banner.title}
-    </motion.h1>
-    <motion.p className="text-lg md:text-xl text-gray-300 mt-4">
-      {banner.subtitle}
-    </motion.p>
-    <Link href="/livestreams">
-      <button className="mt-6 px-6 py-3 bg-yellow-500 text-black font-bold rounded-lg hover:bg-yellow-600 transition">
-        Watch Online
-      </button>
-    </Link>
-  </div>
-</motion.section>
-
-
-
-{/* ✅ Improved Live Stream & Welcome Section */}
-<section className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 px-6 py-20">
-  <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
-    
-    {/* Updated Left Column: Video Player with Fullscreen Toggle */}
-    <motion.div
-      className="relative w-full rounded-xl overflow-hidden shadow-xl border-2 border-yellow-500"
-      initial={{ opacity: 0, x: -50 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.8 }}
-    >
-      {liveStream && liveStream.videoURL ? (
-        <>
-          <div className="relative pb-[56.25%] h-0">
-            <iframe
-              src={`${getEmbedUrl(liveStream.videoURL)}?rel=0&modestbranding=1&controls=1&autoplay=1&mute=1`}
-              className="absolute top-0 left-0 w-full h-full rounded-md"
-              frameBorder="0"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-              title={liveStream.title || "Live Stream"}
-            />
-          </div>
-          <button
-            onClick={() => setIsFullscreen(true)}
-            className="absolute bottom-3 right-3 z-20 bg-black bg-opacity-60 text-white text-xs px-3 py-1 rounded hover:bg-opacity-80 transition"
-          >
-            Fullscreen
-          </button>
-        </>
-      ) : (
-        <div className="bg-gray-800 text-center p-10 rounded-lg h-full flex flex-col items-center justify-center">
-          <p className="text-gray-400">No livestream currently available</p>
-          <p className="text-sm text-gray-500 mt-2">Check back later or watch past sermons.</p>
-          <Link href="/sermons">
-            <button className="mt-4 bg-yellow-500 text-black px-4 py-2 rounded-md hover:bg-yellow-600">
-              Watch Past Sermons
+    <div className="bg-black text-white">
+      {/* Hero Section */}
+      <motion.section className="relative h-screen flex items-center justify-center text-center overflow-hidden">
+        {banner.mediaType === "video" ? (
+          <video autoPlay loop muted className="absolute inset-0 object-cover w-full h-full">
+            <source src={banner.mediaUrl} />
+          </video>
+        ) : (
+          <div
+            className="absolute inset-0 bg-cover bg-center"
+            style={{ backgroundImage: `url(${banner.mediaUrl})` }}
+          />
+        )}
+        <div className="absolute inset-0 bg-black bg-opacity-60" />
+        <div className="z-10 px-4 max-w-4xl">
+          <motion.h1 className="text-5xl md:text-6xl font-bold mb-4">{banner.title}</motion.h1>
+          <motion.p className="text-lg md:text-xl text-gray-300 mb-6">{banner.subtitle}</motion.p>
+          <Link href="/frontend/livestream">
+            <button className="px-6 py-3 bg-yellow-500 text-black font-bold rounded-lg hover:bg-yellow-600 transition">
+              Watch Online
             </button>
           </Link>
         </div>
-      )}
-    </motion.div>
+      </motion.section>
 
-    {/* ✅ Right Column: Welcome & Actions */}
-    <motion.div
-      className="text-center md:text-left"
-      initial={{ opacity: 0, x: 50 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.8, delay: 0.3 }}
-    >
-      <h2 className="text-4xl font-bold text-white mb-4">Welcome to The Light's House Church</h2>
-      <p className="text-gray-300 mb-8">
-        A grace-based, Jesus-centered teaching and worship environment through an interactive digital church experience.
-      </p>
-      
-      <div className="flex flex-col gap-4 max-w-md mx-auto md:mx-0">
-        <Link href="/schedule">
-          <button className="w-full bg-yellow-500 text-black font-semibold py-3 px-6 rounded-lg hover:bg-yellow-600 transition-shadow shadow-md">
-            Service Schedule
-          </button>
-        </Link>
-        <Link href="/new-here">
-          <button className="w-full bg-gray-800 text-white border border-gray-600 py-3 px-6 rounded-lg hover:bg-gray-700 transition-shadow shadow-md">
-            I'm New Here
-          </button>
-        </Link>
-        <Link href="/give">
-          <button className="w-full bg-gray-800 text-white border border-gray-600 py-3 px-6 rounded-lg hover:bg-gray-700 transition-shadow shadow-md">
-            Give Online
-          </button>
-        </Link>
-        <Link href="/lobby">
-          <button className="w-full bg-gray-800 text-white border border-gray-600 py-3 px-6 rounded-lg hover:bg-gray-700 transition-shadow shadow-md">
-            Join the Lobby
-          </button>
-        </Link>
-        <Link href="/prayer-request">
-          <button className="w-full bg-gray-800 text-white border border-gray-600 py-3 px-6 rounded-lg hover:bg-gray-700 transition-shadow shadow-md">
-            I Have a Prayer Request
-          </button>
-        </Link>
-      </div>
-    </motion.div>
-  </div>
-</section>
+      {/* Live Stream + Quick Actions */}
+      <section className="px-6 py-20 bg-gradient-to-br from-gray-900 to-gray-800">
+        <div className="max-w-6xl mx-auto grid md:grid-cols-2 gap-12 items-center">
+          {/* Video Pane */}
+          <motion.div className="relative overflow-hidden rounded-xl shadow-xl border-2 border-yellow-500">
+            {liveStream?.videoURL ? (
+              <div className="relative pb-[56.25%] h-0">
+                <iframe
+                  src={getEmbedUrl(liveStream.videoURL)}
+                  className="absolute inset-0 w-full h-full"
+                  allow="autoplay; encrypted-media"
+                  allowFullScreen
+                />
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center p-10 bg-gray-800 rounded-lg">
+                <p className="text-gray-400 mb-4">No livestream available</p>
+                <Link href="/sermons">
+                  <button className="px-4 py-2 bg-yellow-500 text-black rounded-md hover:bg-yellow-600 transition">
+                    Watch Past Sermons
+                  </button>
+                </Link>
+              </div>
+            )}
+          </motion.div>
 
-{/* Fullscreen Overlay */}
-{isFullscreen && liveStream && liveStream.videoURL && (
-  <div className="fixed inset-0 z-50 bg-black bg-opacity-90 flex items-center justify-center">
-    <div className="relative w-full max-w-5xl aspect-video">
-      <iframe
-        src={`${getEmbedUrl(liveStream.videoURL)}?rel=0&modestbranding=1&controls=1&autoplay=1&mute=1`}
-        className="w-full h-full rounded-lg"
-        frameBorder="0"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-        allowFullScreen
-        title={liveStream.title || "Live Stream"}
-      />
-      <button
-        onClick={() => setIsFullscreen(false)}
-        className="absolute top-4 right-4 text-white bg-black bg-opacity-70 px-4 py-2 rounded hover:bg-opacity-90 transition"
-      >
-        Close
-      </button>
-    </div>
-  </div>
-)}
-
-
-
-{/* ✅ Improved Events Section */}
-<motion.section
-  className="py-16 bg-gray-900"
-  initial={{ opacity: 0, y: 40 }}
-  animate={{ opacity: 1, y: 0 }}
-  transition={{ delay: 0.3 }}
->
-  <div className="max-w-6xl mx-auto">
-    <h3 className="text-3xl font-bold mb-8 text-white">Upcoming Events</h3>
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
-      {events.slice(0, 3).map((event, index) => (
-        <motion.div
-          key={event.id}
-          className="bg-gray-800 rounded-lg overflow-hidden shadow-lg transform hover:scale-105 transition-transform duration-300"
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: index * 0.1 }}
-        >
-          {/* Use Next.js Image for optimized lazy loading */}
-          <Image
-            src={event.imageUrl || "/images/event-placeholder.jpg"}
-            alt={event.title || "Event image"}
-            width={500}
-            height={300}
-            className="w-full h-48 object-cover"
-          />
-          <div className="p-4">
-            <h4 className="text-xl font-semibold text-white mb-1">{event.title}</h4>
-            <p className="text-sm text-yellow-400">
-              {dayjs(event.date).format("MMMM D, YYYY h:mm A")}
+          {/* Actions Pane */}
+          <motion.div className="text-center md:text-left">
+            <h2 className="text-4xl font-bold mb-4">Welcome to The Light's House Church</h2>
+            <p className="text-gray-300 mb-8 max-w-lg">
+              A grace-based, Jesus-centered teaching and worship environment.
             </p>
-            <Link href={`/events/${event.id}`}>
-              <button className="mt-3 px-4 py-2 bg-yellow-500 text-black rounded-md hover:bg-yellow-600 transition">
-                View Details
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-md mx-auto md:mx-0 mb-8">
+              {[
+                { href: "/frontend/schedule", label: "Service Schedule" },
+                { href: "/frontend/new-here", label: "I'm New Here" },
+                { href: "/frontend/giving", label: "Give Online" },
+                { href: "/frontend/lobby", label: "Join the Lobby" },
+                { href: "/frontend/prayer-wall", label: "I Have a Prayer Request" },
+              ].map(btn => (
+                <Link key={btn.href} href={btn.href}>
+                  <button className="w-full py-3 px-4 bg-yellow-500 text-black font-semibold rounded-lg hover:bg-yellow-600 transition">
+                    {btn.label}
+                  </button>
+                </Link>
+              ))}
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Fullscreen Overlay */}
+      {isFullscreen && liveStream?.videoURL && (
+        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50">
+          <div className="relative w-full max-w-5xl aspect-video">
+            <iframe
+              src={getEmbedUrl(liveStream.videoURL)}
+              className="w-full h-full rounded-lg"
+              allowFullScreen
+            />
+            <button onClick={() => setIsFullscreen(false)}
+              className="absolute top-4 right-4 bg-black bg-opacity-70 text-white px-4 py-2 rounded">
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Upcoming Events */}
+      <motion.section className="py-16 bg-gray-900"
+        initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: .3 }}>
+        <div className="max-w-6xl mx-auto">
+          <h3 className="text-3xl font-bold text-white mb-8">Upcoming Events</h3>
+          <div className="grid gap-8 sm:grid-cols-2 md:grid-cols-3">
+            {events.slice(0, 3).map((e, i) => (
+              <motion.div key={e.id} className="bg-gray-800 rounded-lg overflow-hidden shadow-lg"
+                initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * .1 }}>
+                <Image
+                  src={e.imageUrl || "/images/event-placeholder.jpg"}
+                  alt={e.title || "Event"}
+                  width={500} height={300}
+                  className="w-full h-48 object-cover"
+                />
+                <div className="p-4">
+                  <h4 className="text-xl font-semibold text-white">{e.title}</h4>
+                  <p className="text-sm text-yellow-400">{dayjs(e.date).format("MMMM D, YYYY h:mm A")}</p>
+                  <Link href={`/events/${e.id}`}>
+                    <button className="mt-3 px-4 py-2 bg-yellow-500 text-black rounded-md">
+                      View Details
+                    </button>
+                  </Link>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+          <div className="mt-8 text-center">
+            <Link href="/events">
+              <button className="px-6 py-3 bg-blue-500 text-white rounded-full font-bold">
+                See All Events
               </button>
             </Link>
           </div>
-        </motion.div>
-      ))}
-    </div>
-    {/* See All Events Button */}
-    <div className="mt-8 text-center">
-      <Link href="/events">
-        <button className="px-6 py-3 bg-blue-500 text-white font-bold rounded-full hover:bg-blue-600 transition-colors">
-          See All Events
-        </button>
-      </Link>
-    </div>
-  </div>
-</motion.section>
+        </div>
+      </motion.section>
 
-
-
-
-{/* ✅ Two-Card Banner Section */}
-<motion.section
-  className="py-16 bg-gray-950"
-  initial={{ opacity: 0, y: 40 }}
-  animate={{ opacity: 1, y: 0 }}
-  transition={{ duration: 0.8 }}
->
-  <div className="max-w-6xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 gap-8">
-    {/* Card 1 */}
-    <motion.div
-      className="bg-gradient-to-br from-yellow-500 to-yellow-400 text-black p-8 rounded-xl shadow-lg hover:scale-105 transition-transform duration-300"
-      whileHover={{ scale: 1.05 }}
-    >
-      {/* Optionally add a custom icon/image above or inside the card */}
-      <div className="mb-4">
-        <img src="/images/community-icon.png" alt="Community" className="w-12 h-12 mx-auto" loading="lazy" />
-      </div>
-      <h3 className="text-2xl font-bold mb-4">Join Our Community</h3>
-      <p className="mb-6 text-sm md:text-base">Connect with other believers and grow together in faith.</p>
-      <Link href="/community">
-        <button className="bg-black text-yellow-400 px-5 py-2 rounded hover:bg-gray-900 transition">
-          Learn More
-        </button>
-      </Link>
-    </motion.div>
-
-    {/* Card 2 */}
-    <motion.div
-      className="bg-gray-800 text-white p-8 rounded-xl shadow-lg hover:scale-105 transition-transform duration-300"
-      whileHover={{ scale: 1.05 }}
-    >
-      {/* Optionally add a custom icon/image above or inside the card */}
-      <div className="mb-4">
-        <img src="/images/retreat-icon.png" alt="Retreat" className="w-12 h-12 mx-auto" loading="lazy" />
-      </div>
-      <h3 className="text-2xl font-bold mb-4">Upcoming Retreat</h3>
-      <p className="mb-6 text-sm md:text-base">Don't miss our next church retreat! Limited spots available.</p>
-      <Link href="/retreat">
-        <button className="bg-yellow-500 text-black px-5 py-2 rounded hover:bg-yellow-600 transition">
-          Reserve Spot
-        </button>
-      </Link>
-    </motion.div>
-  </div>
-</motion.section>
+      {/* Two-Card Banner */}
+      <motion.section className="py-16 bg-gray-950"
+        initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .8 }}>
+        <div className="max-w-6xl mx-auto grid gap-8 md:grid-cols-2 px-6">
+          <motion.div className="bg-gradient-to-br from-yellow-500 to-yellow-400 p-8 rounded-xl text-black shadow-lg"
+            whileHover={{ scale: 1.05 }}>
+            <div className="mb-4"><img src="/images/community-icon.png" alt="Community" className="w-12 h-12 mx-auto" /></div>
+            <h3 className="text-2xl font-bold mb-4">Join Our Community</h3>
+            <p className="mb-6">Connect with believers and grow together in faith.</p>
+            <Link href="/community"><button className="bg-black text-yellow-400 px-5 py-2 rounded">Learn More</button></Link>
+          </motion.div>
+          <motion.div className="bg-gray-800 p-8 rounded-xl text-white shadow-lg"
+            whileHover={{ scale: 1.05 }}>
+            <div className="mb-4"><img src="/images/retreat-icon.png" alt="Retreat" className="w-12 h-12 mx-auto" /></div>
+            <h3 className="text-2xl font-bold mb-4">Upcoming Retreat</h3>
+            <p className="mb-6">Don’t miss our next retreat—limited spots!</p>
+            <Link href="/retreat"><button className="bg-yellow-500 text-black px-5 py-2 rounded">Reserve Spot</button></Link>
+          </motion.div>
+        </div>
+      </motion.section>
 
 
 {/* ✅ New Two-Card Section */}

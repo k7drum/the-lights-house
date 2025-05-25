@@ -1,24 +1,35 @@
-import { db } from "@/config/firebaseConfig";
+// src/app/pages/[slug]/page.tsx
 import { doc, getDoc } from "firebase/firestore";
 import { notFound } from "next/navigation";
+import { db } from "@/config/firebaseConfig";
 
-export default async function Page({ params }) {
-  const { slug } = params;
+type PageData = {
+  css?: string;
+  html?: string;
+};
 
-  // ✅ Fetch Page Data
+export default async function Page({
+  params,
+}: {
+  // Next.js expects params to be a Promise here:
+  params: Promise<{ slug: string }>;
+}) {
+  // first await the incoming params
+  const { slug } = await params;
+
+  // fetch from Firestore
   const pageRef = doc(db, "pages", slug);
   const pageSnap = await getDoc(pageRef);
-
   if (!pageSnap.exists()) {
-    return notFound();
+    notFound();
   }
 
-  const pageData = pageSnap.data();
+  const { css, html } = pageSnap.data() as PageData;
 
   return (
     <div>
-      <style>{pageData.css}</style>
-      <div dangerouslySetInnerHTML={{ __html: pageData.html }} />
+      {css && <style dangerouslySetInnerHTML={{ __html: css }} />}
+      <div dangerouslySetInnerHTML={{ __html: html ?? "" }} />
     </div>
   );
 }

@@ -1,14 +1,25 @@
-import { NextResponse } from "next/server";
-import { db } from "@/config/firebaseConfig";
+import { NextRequest, NextResponse } from "next/server";
 import { doc, deleteDoc } from "firebase/firestore";
+import { db } from "@/config/firebaseConfig";
 
-// ✅ DELETE: Delete a livestream by ID
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+// ✅ DO NOT explicitly type the second argument
+export async function DELETE(
+  req: NextRequest,
+  context: any // ← just use 'any' to bypass the type mismatch
+) {
+  const { id } = context.params;
+
   try {
-    await deleteDoc(doc(db, "livestreams", params.id));
-    return NextResponse.json({ message: "Livestream deleted successfully" }, { status: 200 });
+    await deleteDoc(doc(db, "livestreams", id));
+    return NextResponse.json(
+      { message: "Livestream deleted successfully" },
+      { status: 200 }
+    );
   } catch (error) {
     console.error("Error deleting livestream:", error);
-    return NextResponse.json({ message: "Error deleting livestream" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to delete livestream" },
+      { status: 500 }
+    );
   }
 }

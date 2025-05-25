@@ -1,16 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { db } from "@/config/firebaseConfig";
 import { collection, addDoc } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 
+type FormData = {
+  donorName: string;
+  email: string;
+  amount: string;
+  date: string;
+  method: string;
+  type: string;
+  recurring: boolean;
+};
+
 export default function GivePage() {
   const router = useRouter();
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     donorName: "",
     email: "",
     amount: "",
@@ -19,13 +29,17 @@ export default function GivePage() {
     type: "",
     recurring: false,
   });
-
   const [loading, setLoading] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value, type, checked } = e.target;
+  const handleChange = (
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLSelectElement
+    >
+  ) => {
+    const target = e.target as HTMLInputElement;
+    const { name, value, type, checked } = target;
     setFormData((prev) => ({
       ...prev,
       [name]: type === "checkbox" ? checked : value,
@@ -36,16 +50,19 @@ export default function GivePage() {
     e.preventDefault();
     setErrorMsg("");
 
-    if (!formData.donorName || !formData.amount || !formData.date || !formData.method || !formData.type) {
+    const { donorName, amount, date, method, type } = formData;
+    if (!donorName || !amount || !date || !method || !type) {
       setErrorMsg("Please fill in all required fields.");
       return;
     }
 
     try {
       setLoading(true);
-      await addDoc(collection(db, "donations"), formData);
+      await addDoc(collection(db, "donations"), {
+        ...formData,
+        createdAt: new Date(),
+      });
 
-      setLoading(false);
       setShowSuccessModal(true);
       setFormData({
         donorName: "",
@@ -60,92 +77,83 @@ export default function GivePage() {
       setTimeout(() => {
         router.push("/frontend/giving/success");
       }, 3000);
-
     } catch (error) {
       console.error("Error saving donation:", error);
       setErrorMsg("Something went wrong. Please try again.");
+    } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex flex-col justify-between bg-black text-white">
-      {/* Main Giving Form Section */}
+    <div className="flex min-h-screen flex-col justify-between bg-black text-white">
       <div className="flex-grow flex items-center justify-center py-12 px-4">
         <motion.div
           initial={{ opacity: 0, y: 50 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8 }}
-          className="bg-gray-800 rounded-lg shadow-md p-8 max-w-xl w-full"
+          className="w-full max-w-xl rounded-lg bg-gray-800 p-8 shadow-md"
         >
-          <h1 className="text-3xl font-bold mb-6 text-center">Give Online</h1>
-
+          <h1 className="mb-6 text-center text-3xl font-bold">
+            Give Online
+          </h1>
           {errorMsg && (
-            <p className="text-red-400 mb-4 text-center">{errorMsg}</p>
+            <p className="mb-4 text-center text-red-400">{errorMsg}</p>
           )}
-
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Donor Name */}
             <div>
-              <label className="block text-sm mb-1">Donor Name *</label>
+              <label className="block mb-1 text-sm">Donor Name *</label>
               <input
-                type="text"
                 name="donorName"
+                type="text"
                 value={formData.donorName}
                 onChange={handleChange}
-                className="p-3 bg-gray-700 rounded w-full"
                 required
+                className="w-full rounded bg-gray-700 p-3 text-white"
               />
             </div>
-
-            {/* Email */}
             <div>
-              <label className="block text-sm mb-1">Email (optional)</label>
+              <label className="block mb-1 text-sm">Email (optional)</label>
               <input
-                type="email"
                 name="email"
+                type="email"
                 value={formData.email}
                 onChange={handleChange}
-                className="p-3 bg-gray-700 rounded w-full"
+                className="w-full rounded bg-gray-700 p-3 text-white"
               />
             </div>
-
-            {/* Amount and Date */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="block text-sm mb-1">Amount *</label>
+                <label className="block mb-1 text-sm">Amount *</label>
                 <input
-                  type="number"
                   name="amount"
+                  type="number"
                   value={formData.amount}
                   onChange={handleChange}
-                  className="p-3 bg-gray-700 rounded w-full"
                   required
+                  className="w-full rounded bg-gray-700 p-3 text-white"
                 />
               </div>
-
               <div>
-                <label className="block text-sm mb-1">Date *</label>
+                <label className="block mb-1 text-sm">Date *</label>
                 <input
-                  type="date"
                   name="date"
+                  type="date"
                   value={formData.date}
                   onChange={handleChange}
-                  className="p-3 bg-gray-700 rounded w-full"
                   required
+                  className="w-full rounded bg-gray-700 p-3 text-white"
                 />
               </div>
             </div>
-
-            {/* Giving Type */}
             <div>
-              <label className="block text-sm mb-1">Giving Type *</label>
+              <label className="block mb-1 text-sm">Giving Type *</label>
               <select
                 name="type"
                 value={formData.type}
                 onChange={handleChange}
-                className="p-3 bg-gray-700 rounded w-full"
                 required
+                className="w-full rounded bg-gray-700 p-3 text-white"
               >
                 <option value="">Select Giving Type</option>
                 <option value="Tithe">Tithe</option>
@@ -155,16 +163,16 @@ export default function GivePage() {
                 <option value="Others">Others</option>
               </select>
             </div>
-
-            {/* Payment Method */}
             <div>
-              <label className="block text-sm mb-1">Payment Method *</label>
+              <label className="block mb-1 text-sm">
+                Payment Method *
+              </label>
               <select
                 name="method"
                 value={formData.method}
                 onChange={handleChange}
-                className="p-3 bg-gray-700 rounded w-full"
                 required
+                className="w-full rounded bg-gray-700 p-3 text-white"
               >
                 <option value="">Select Method</option>
                 <option value="Stripe">Stripe</option>
@@ -174,26 +182,24 @@ export default function GivePage() {
                 <option value="Mobile Money">Mobile Money</option>
               </select>
             </div>
-
-            {/* Recurring Giving */}
             <div className="flex items-center space-x-2">
               <input
-                type="checkbox"
                 name="recurring"
+                type="checkbox"
                 checked={formData.recurring}
                 onChange={handleChange}
-                className="form-checkbox text-yellow-500"
+                className="form-checkbox h-5 w-5 text-yellow-500"
               />
-              <label className="text-sm text-gray-300">Make this a monthly recurring gift</label>
+              <label className="text-sm text-gray-300">
+                Make this a monthly recurring gift
+              </label>
             </div>
-
-            {/* Submit Button */}
             <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
               type="submit"
               disabled={loading}
-              className="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-bold py-3 rounded-lg mt-6 transition-all"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="w-full rounded-lg bg-yellow-500 py-3 font-bold text-black transition-all hover:bg-yellow-600"
             >
               {loading ? "Processing..." : "Give Now"}
             </motion.button>
@@ -201,26 +207,27 @@ export default function GivePage() {
         </motion.div>
       </div>
 
-      {/* Success Modal */}
       <AnimatePresence>
         {showSuccessModal && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-80 z-50"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80"
           >
             <motion.div
               initial={{ scale: 0.5 }}
               animate={{ scale: 1 }}
               exit={{ scale: 0.5 }}
-              className="bg-white text-black p-8 rounded-lg shadow-lg max-w-sm w-full text-center"
+              className="w-full max-w-sm rounded-lg bg-white p-8 text-center shadow-lg"
             >
-              <h2 className="text-2xl font-bold mb-4">Thank You!</h2>
-              <p className="mb-6">Your donation has been received successfully.</p>
+              <h2 className="mb-4 text-2xl font-bold">Thank You!</h2>
+              <p className="mb-6">
+                Your donation has been received successfully.
+              </p>
               <button
                 onClick={() => setShowSuccessModal(false)}
-                className="bg-yellow-500 hover:bg-yellow-600 text-black font-bold py-2 px-6 rounded"
+                className="rounded bg-yellow-500 py-2 px-6 font-bold text-black hover:bg-yellow-600"
               >
                 Close
               </button>

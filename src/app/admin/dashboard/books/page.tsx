@@ -1,14 +1,40 @@
 "use client";
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, ChangeEvent } from "react";
 import { db, storage } from "@/config/firebaseConfig";
-import { collection, addDoc, getDocs, updateDoc, deleteDoc, doc } from "firebase/firestore";
+import {
+  collection,
+  addDoc,
+  getDocs,
+  updateDoc,
+  deleteDoc,
+  doc,
+} from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { Trash2, Edit, Plus, Upload, Download } from "lucide-react";
+import { Trash2, Edit, Upload, Download } from "lucide-react";
+
+interface Book {
+  id: string;
+  title: string;
+  author: string;
+  category: string;
+  bookFileUrl?: string;
+  coverImageUrl?: string;
+}
+
+interface NewBook {
+  title: string;
+  author: string;
+  category: string;
+  bookFile: File | null;
+  bookFileUrl: string;
+  coverImage: File | null;
+  coverImageUrl: string;
+}
 
 export default function BooksPage() {
-  const [books, setBooks] = useState<any[]>([]);
-  const [editingBook, setEditingBook] = useState<any>(null);
-  const [newBook, setNewBook] = useState({
+  const [books, setBooks] = useState<Book[]>([]);
+  const [editingBook, setEditingBook] = useState<Book | null>(null);
+  const [newBook, setNewBook] = useState<NewBook>({
     title: "",
     author: "",
     category: "",
@@ -23,26 +49,29 @@ export default function BooksPage() {
     fetchBooks();
   }, []);
 
-  // ✅ Fetch Books from Firestore
   const fetchBooks = async () => {
     try {
-      const querySnapshot = await getDocs(collection(db, "books"));
-      const bookList = querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      setBooks(bookList);
-    } catch (error) {
-      console.error("Error fetching books:", error);
+      const snapshot = await getDocs(collection(db, "books"));
+      const list = snapshot.docs.map((d) => ({
+        id: d.id,
+        ...(d.data() as Omit<Book, "id">),
+      }));
+      setBooks(list);
+    } catch (err) {
+      console.error("Error fetching books:", err);
     }
   };
 
-  // ✅ Handle File Upload
-  const handleFileUpload = async (file: File | null, path: string) => {
+  const handleFileUpload = async (
+    file: File | null,
+    path: string
+  ): Promise<string> => {
     if (!file) return "";
     const storageRef = ref(storage, `${path}/${file.name}`);
-    const snapshot = await uploadBytes(storageRef, file);
-    return await getDownloadURL(snapshot.ref);
+    const snap = await uploadBytes(storageRef, file);
+    return getDownloadURL(snap.ref);
   };
 
-  // ✅ Add or Update Book
   const saveBook = async () => {
     if (!newBook.title || !newBook.author) {
       alert("Please fill all required fields!");
@@ -51,14 +80,19 @@ export default function BooksPage() {
 
     setSaving(true);
     try {
-      let bookFileUrl = newBook.bookFileUrl;
-      let coverImageUrl = newBook.coverImageUrl;
+      let { bookFileUrl, coverImageUrl } = newBook;
 
       if (newBook.bookFile) {
-        bookFileUrl = await handleFileUpload(newBook.bookFile, "books/files");
+        bookFileUrl = await handleFileUpload(
+          newBook.bookFile,
+          "books/files"
+        );
       }
       if (newBook.coverImage) {
-        coverImageUrl = await handleFileUpload(newBook.coverImage, "books/covers");
+        coverImageUrl = await handleFileUpload(
+          newBook.coverImage,
+          "books/covers"
+        );
       }
 
       if (editingBook) {
@@ -80,74 +114,108 @@ export default function BooksPage() {
         });
       }
 
-      setNewBook({ title: "", author: "", category: "", bookFile: null, bookFileUrl: "", coverImage: null, coverImageUrl: "" });
+      setNewBook({
+        title: "",
+        author: "",
+        category: "",
+        bookFile: null,
+        bookFileUrl: "",
+        coverImage: null,
+        coverImageUrl: "",
+      });
       setEditingBook(null);
-      fetchBooks();
-      alert("Book Saved Successfully!");
-    } catch (error) {
-      console.error("Error saving book:", error);
+      await fetchBooks();
+      alert("Book saved successfully!");
+    } catch (err) {
+      console.error("Error saving book:", err);
       alert("Failed to save book.");
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
-  // ✅ Edit Book
-  const editBook = (book: any) => {
+  const editBook = (book: Book) => {
     setEditingBook(book);
     setNewBook({
       title: book.title,
       author: book.author,
       category: book.category,
+      bookFile: null,
       bookFileUrl: book.bookFileUrl || "",
+      coverImage: null,
       coverImageUrl: book.coverImageUrl || "",
     });
   };
 
-  // ✅ Delete Book
   const deleteBook = async (id: string) => {
     try {
       await deleteDoc(doc(db, "books", id));
       fetchBooks();
-    } catch (error) {
-      console.error("Error deleting book:", error);
+    } catch (err) {
+      console.error("Error deleting book:", err);
     }
+  };
+
+  const handleInputChange = (
+    e: ChangeEvent<HTMLInputElement>
+  ): void => {
+    setNewBook({
+      ...newBook,
+      [e.target.name]: e.target.value,
+    } as Pick<NewBook, keyof NewBook>);
+  };
+
+  const handleFileChange = (
+    e: ChangeEvent<HTMLInputElement>,
+    field: "bookFile" | "coverImage"
+  ): void => {
+    const file = e.target.files?.[0] ?? null;
+    setNewBook({
+      ...newBook,
+      [field]: file,
+    });
   };
 
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold">Books Management</h1>
 
-      {/* Add or Edit Book Form */}
+      {/* Add / Edit Form */}
       <div className="mt-6 p-4 bg-gray-800 rounded-lg shadow-md">
-        <h2 className="text-lg font-semibold mb-2">{editingBook ? "Edit Book" : "Add New Book"}</h2>
+        <h2 className="text-lg font-semibold mb-2">
+          {editingBook ? "Edit Book" : "Add New Book"}
+        </h2>
         <div className="grid grid-cols-2 gap-4">
           <label>
             Title:
             <input
+              name="title"
               type="text"
               placeholder="Book Title"
               value={newBook.title}
-              onChange={(e) => setNewBook({ ...newBook, title: e.target.value })}
+              onChange={handleInputChange}
               className="p-2 bg-gray-700 rounded w-full"
             />
           </label>
           <label>
             Author:
             <input
+              name="author"
               type="text"
               placeholder="Author Name"
               value={newBook.author}
-              onChange={(e) => setNewBook({ ...newBook, author: e.target.value })}
+              onChange={handleInputChange}
               className="p-2 bg-gray-700 rounded w-full"
             />
           </label>
           <label>
             Category:
             <input
+              name="category"
               type="text"
               placeholder="Category"
               value={newBook.category}
-              onChange={(e) => setNewBook({ ...newBook, category: e.target.value })}
+              onChange={handleInputChange}
               className="p-2 bg-gray-700 rounded w-full"
             />
           </label>
@@ -156,7 +224,7 @@ export default function BooksPage() {
             <input
               type="file"
               accept=".pdf"
-              onChange={(e) => setNewBook({ ...newBook, bookFile: e.target.files?.[0] || null })}
+              onChange={(e) => handleFileChange(e, "bookFile")}
               className="p-2 bg-gray-700 rounded w-full"
             />
           </label>
@@ -165,17 +233,28 @@ export default function BooksPage() {
             <input
               type="file"
               accept="image/*"
-              onChange={(e) => setNewBook({ ...newBook, coverImage: e.target.files?.[0] || null })}
+              onChange={(e) => handleFileChange(e, "coverImage")}
               className="p-2 bg-gray-700 rounded w-full"
             />
           </label>
         </div>
-        <button onClick={saveBook} disabled={saving} className="mt-4 px-4 py-2 bg-red-600 rounded-lg text-white flex items-center">
-          {saving ? "Saving..." : <><Upload className="mr-2" /> {editingBook ? "Update Book" : "Save Book"}</>}
+        <button
+          onClick={saveBook}
+          disabled={saving}
+          className="mt-4 px-4 py-2 bg-red-600 rounded-lg text-white flex items-center"
+        >
+          {saving ? (
+            "Saving..."
+          ) : (
+            <>
+              <Upload className="mr-2" />
+              {editingBook ? "Update Book" : "Save Book"}
+            </>
+          )}
         </button>
       </div>
 
-      {/* Books History List */}
+      {/* Books List */}
       <div className="mt-6 bg-gray-800 p-4 rounded-lg shadow-md">
         <h2 className="text-lg font-semibold mb-2">Books List</h2>
         <table className="w-full text-left">
@@ -195,14 +274,26 @@ export default function BooksPage() {
                 <td className="p-2">{book.category}</td>
                 <td className="p-2 flex space-x-2">
                   {book.bookFileUrl && (
-                    <a href={book.bookFileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-400 flex items-center">
-                      <Download className="mr-1" /> Download Book
+                    <a
+                      href={book.bookFileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-400 flex items-center"
+                    >
+                      <Download className="mr-1" />
+                      Download
                     </a>
                   )}
-                  <button onClick={() => editBook(book)} className="text-blue-400">
+                  <button
+                    onClick={() => editBook(book)}
+                    className="text-blue-400"
+                  >
                     <Edit />
                   </button>
-                  <button onClick={() => deleteBook(book.id)} className="text-red-500">
+                  <button
+                    onClick={() => deleteBook(book.id)}
+                    className="text-red-500"
+                  >
                     <Trash2 />
                   </button>
                 </td>

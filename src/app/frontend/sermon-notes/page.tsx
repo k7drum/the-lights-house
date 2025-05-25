@@ -1,3 +1,4 @@
+// src/app/frontend/sermon-notes/page.tsx
 "use client";
 
 import { motion } from "framer-motion";
@@ -8,17 +9,19 @@ import { useFetchSermons } from "@/hooks/useFetchSermons";
 export default function SermonNotesPage() {
   const { sermons, loading, error } = useFetchSermons();
 
-  // Estimate reading time: 200 words/minute
+  // Approximate reading time at 200 wpm
   const readingTime = (text?: string) => {
     if (!text) return 0;
-    const words = text.trim().split(/\s+/).filter(Boolean).length;
+    const words = text.trim().split(/\s+/).length;
     return Math.ceil(words / 200);
   };
 
   return (
     <div className="bg-black text-white min-h-screen p-6">
       <h1 className="text-4xl font-bold mb-8 text-center">Sermon Notes</h1>
+
       {error && <p className="text-red-500 text-center">{error}</p>}
+
       {loading ? (
         <p className="text-gray-400 text-center">Loading sermons...</p>
       ) : (

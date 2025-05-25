@@ -1,11 +1,18 @@
 "use client";
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, ChangeEvent } from "react";
 import { db } from "@/config/firebaseConfig";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { Save } from "lucide-react";
 
+interface BannerData {
+  title: string;
+  subtitle: string;
+  mediaType: "image" | "video";
+  mediaUrl: string;
+}
+
 export default function BannerSettings() {
-  const [banner, setBanner] = useState({
+  const [banner, setBanner] = useState<BannerData>({
     title: "",
     subtitle: "",
     mediaType: "image",
@@ -17,30 +24,58 @@ export default function BannerSettings() {
     fetchBanner();
   }, []);
 
-  // ✅ Fetch Banner Data
+  // Fetch the banner document and populate state
   const fetchBanner = async () => {
     try {
       const docRef = doc(db, "settings", "homepageBanner");
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        setBanner(docSnap.data());
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        const data = snap.data();
+        setBanner({
+          title: (data.title as string) || "",
+          subtitle: (data.subtitle as string) || "",
+          mediaType: (data.mediaType as "image" | "video") || "image",
+          mediaUrl: (data.mediaUrl as string) || "",
+        });
       }
-    } catch (error) {
-      console.error("Error fetching banner:", error);
+    } catch (err) {
+      console.error("Error fetching banner:", err);
     }
   };
 
-  // ✅ Save Banner Data
+  // Save the banner fields individually to satisfy Firestore's typing
   const saveBanner = async () => {
     setLoading(true);
     try {
-      await updateDoc(doc(db, "settings", "homepageBanner"), banner);
+      const docRef = doc(db, "settings", "homepageBanner");
+      await updateDoc(docRef, {
+        title: banner.title,
+        subtitle: banner.subtitle,
+        mediaType: banner.mediaType,
+        mediaUrl: banner.mediaUrl,
+      });
       alert("Banner updated successfully!");
-    } catch (error) {
-      console.error("Error updating banner:", error);
+    } catch (err) {
+      console.error("Error updating banner:", err);
+      alert("Failed to update banner.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
+
+  // Generalized change handler
+  const handleChange =
+    (field: keyof BannerData) =>
+    (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+      const value = e.target.value;
+      setBanner((prev) => ({
+        ...prev,
+        [field]:
+          field === "mediaType"
+            ? (value as "image" | "video")
+            : value,
+      }));
+    };
 
   return (
     <div className="p-6">
@@ -50,7 +85,7 @@ export default function BannerSettings() {
       <input
         type="text"
         value={banner.title}
-        onChange={(e) => setBanner({ ...banner, title: e.target.value })}
+        onChange={handleChange("title")}
         className="p-2 bg-gray-700 rounded w-full mb-2"
       />
 
@@ -58,14 +93,14 @@ export default function BannerSettings() {
       <input
         type="text"
         value={banner.subtitle}
-        onChange={(e) => setBanner({ ...banner, subtitle: e.target.value })}
+        onChange={handleChange("subtitle")}
         className="p-2 bg-gray-700 rounded w-full mb-2"
       />
 
       <label className="block text-gray-400">Media Type</label>
       <select
         value={banner.mediaType}
-        onChange={(e) => setBanner({ ...banner, mediaType: e.target.value })}
+        onChange={handleChange("mediaType")}
         className="p-2 bg-gray-700 rounded w-full mb-2"
       >
         <option value="image">Image</option>
@@ -75,10 +110,10 @@ export default function BannerSettings() {
       <label className="block text-gray-400">Media URL</label>
       <input
         type="text"
-        placeholder="Enter image or video URL"
         value={banner.mediaUrl}
-        onChange={(e) => setBanner({ ...banner, mediaUrl: e.target.value })}
-        className="p-2 bg-gray-700 rounded w-full mb-2"
+        onChange={handleChange("mediaUrl")}
+        className="p-2 bg-gray-700 rounded w-full mb-4"
+        placeholder="Enter image or video URL"
       />
 
       <button
@@ -86,7 +121,8 @@ export default function BannerSettings() {
         disabled={loading}
         className="px-4 py-2 bg-green-600 text-white rounded-lg flex items-center"
       >
-        <Save className="mr-2" /> {loading ? "Saving..." : "Save Changes"}
+        <Save className="mr-2" />
+        {loading ? "Saving..." : "Save Changes"}
       </button>
     </div>
   );

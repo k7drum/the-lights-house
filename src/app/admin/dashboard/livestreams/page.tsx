@@ -1,442 +1,445 @@
+// src/app/admin/dashboard/livestreams/page.tsx
 "use client";
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, ChangeEvent } from "react";
 import { db, storage } from "@/config/firebaseConfig";
 import {
   collection,
   addDoc,
   getDocs,
   deleteDoc,
-  Timestamp,
-  doc,
   updateDoc,
+  doc,
+  Timestamp,
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import {
-  Trash2,
-  UploadCloud,
-  Save,
-  Pencil,
-  PlayCircle,
-  CalendarClock,
-} from "lucide-react";
+import { Trash2, UploadCloud, Pencil, X } from "lucide-react";
+import dayjs from "dayjs";
 import ChatBox from "@/components/livestream/ChatBox";
 
-export default function LivestreamsPage() {
-  const [livestreams, setLivestreams] = useState<any[]>([]);
-  const [selectedLivestream, setSelectedLivestream] = useState<string | null>(
-    null
-  );
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
+// ─── TYPES ────────────────────────────────────────────────────────────────
+interface SermonNote { id: string; title: string }
+type LiveStatus = "scheduled" | "live" | "offline";
 
-  const [newLivestream, setNewLivestream] = useState({
-    title: "",
-    description: "",
-    videoFile: null,
-    videoURL: "",
-    thumbnailFile: null,
-    thumbnailURL: "",
-    type: "upload",
-    status: "live",
-    scheduleDate: "",
-    startTime: "",
-    endTime: "",
+interface LivestreamRecord {
+  id: string;
+  title: string;
+  description: string;
+  type: "upload" | "link" | "iframe";
+  videoURL: string;
+  thumbnailURL: string;
+  status: LiveStatus;
+  scheduleDate: Date | null;
+  startTime: Date | null;
+  endTime: Date | null;
+  preacher: string;
+  songs: string[];
+  activities: string[];
+  sermonNoteId: string;
+}
+
+interface FormData {
+  title: string;
+  description: string;
+  type: "upload" | "link" | "iframe";
+  videoFile: File | null;
+  videoURL: string;
+  thumbnailFile: File | null;
+  thumbnailURL: string;
+  status: LiveStatus;
+  scheduleDate: string;
+  startTime: string;
+  endTime: string;
+  preacher: string;
+  songs: string;
+  activities: string;
+  sermonNoteId: string;
+}
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────
+function computeStatus(ls: LivestreamRecord): LiveStatus {
+  if (ls.status !== "scheduled") return ls.status;
+  if (!ls.startTime || !ls.endTime) return "scheduled";
+  const now = dayjs();
+  if (now.isBefore(ls.startTime)) return "scheduled";
+  if (now.isAfter(ls.endTime))    return "offline";
+  return "live";
+}
+
+async function uploadFile(path: string, file: File): Promise<string> {
+  const r = ref(storage, `${path}/${file.name}`);
+  const snap = await uploadBytes(r, file);
+  return getDownloadURL(snap.ref);
+}
+
+// ─── LIVESTREAMS PAGE ─────────────────────────────────────────────────────
+export default function LivestreamsPage() {
+  const [livestreams, setLivestreams] = useState<LivestreamRecord[]>([]);
+  const [sermonNotes, setSermonNotes]   = useState<SermonNote[]>([]);
+  const [adding, setAdding]             = useState(false);
+
+  const [newData, setNewData] = useState<FormData>({
+    title: "", description: "", type: "upload", videoFile: null, videoURL: "",
+    thumbnailFile: null, thumbnailURL: "", status: "scheduled",
+    scheduleDate:"", startTime:"", endTime:"",
+    preacher:"", songs:"", activities:"", sermonNoteId:"",
   });
 
+  const [editData, setEditData] = useState<FormData | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  // ─── FETCH ───────────────────────────────────────────────────────────────
   useEffect(() => {
+    fetchSermonNotes();
     fetchLivestreams();
   }, []);
 
-  const fetchLivestreams = async () => {
-    try {
-      const querySnapshot = await getDocs(collection(db, "livestreams"));
-      const list = querySnapshot.docs.map((doc) => {
-        const data = doc.data();
-  
-        return {
-          id: doc.id,
-          ...data,
-          scheduleDate: data.scheduleDate && data.scheduleDate.toDate
-            ? data.scheduleDate.toDate()
-            : data.scheduleDate || null,
-          startTime: data.startTime && data.startTime.toDate
-            ? data.startTime.toDate()
-            : data.startTime || null,
-          endTime: data.endTime && data.endTime.toDate
-            ? data.endTime.toDate()
-            : data.endTime || null,
-        };
-      });
-  
-      setLivestreams(list);
-      if (list.length > 0) setSelectedLivestream(list[0].id);
-    } catch (err) {
-      console.error("Error fetching livestreams:", err);
-    }
-  };
-  
+  async function fetchSermonNotes() {
+    const snap = await getDocs(collection(db, "sermons"));
+    setSermonNotes(snap.docs.map(d => ({
+      id: d.id,
+      title: (d.data().title as string) || "Untitled"
+    })));
+  }
 
-  const handleVideoUpload = async (file: File | null) => {
-    if (!file) return null;
-    const storageRef = ref(storage, `livestreams/${file.name}`);
-    const snapshot = await uploadBytes(storageRef, file);
-    return await getDownloadURL(snapshot.ref);
-  };
+  async function fetchLivestreams() {
+    const snap = await getDocs(collection(db, "livestreams"));
+    setLivestreams(snap.docs.map(d => {
+      const data: any = d.data();
+      return {
+        id: d.id,
+        title:        data.title        || "",
+        description:  data.description  || "",
+        type:         data.type         || "link",
+        videoURL:     data.videoURL     || "",
+        thumbnailURL: data.thumbnailURL || "",
+        status:       data.status       || "scheduled",
+        scheduleDate: data.scheduleDate ? (data.scheduleDate as Timestamp).toDate() : null,
+        startTime:    data.startTime    ? (data.startTime    as Timestamp).toDate() : null,
+        endTime:      data.endTime      ? (data.endTime      as Timestamp).toDate() : null,
+        preacher:     data.preacher     || "",
+        songs:        data.songs        || [],
+        activities:   data.activities   || [],
+        sermonNoteId: data.sermonNoteId || "",
+      } as LivestreamRecord;
+    }));
+  }
 
-  const addLivestream = async () => {
-    if (!newLivestream.title || !newLivestream.description) {
-      alert("Please fill all fields!");
+  // ─── COMMON CHANGE HANDLERS ─────────────────────────────────────────────
+  const onFormChange = (setter: React.Dispatch<React.SetStateAction<FormData>>, data: FormData) =>
+    (field: keyof FormData) =>
+      (e: ChangeEvent<HTMLInputElement|HTMLTextAreaElement|HTMLSelectElement>) => {
+        const val =
+          field==="videoFile"||field==="thumbnailFile"
+            ? (e.target as HTMLInputElement).files?.[0] ?? null
+            : e.target.value;
+        setter({ ...data, [field]: val });
+      };
+
+  // ─── ADD ─────────────────────────────────────────────────────────────────
+  async function handleAdd() {
+    if (!newData.title || !newData.description || !newData.sermonNoteId) {
+      alert("Title, description & sermon note are required");
       return;
     }
-  
-    setUploading(true);
+    setAdding(true);
     try {
-      let videoURL = newLivestream.videoURL;
-      let thumbnailURL = newLivestream.thumbnailURL;
-  
-      if (newLivestream.type === "upload" && newLivestream.videoFile) {
-        videoURL = await handleVideoUpload(newLivestream.videoFile);
-      }
-  
-      if (newLivestream.thumbnailFile) {
-        thumbnailURL = await handleThumbnailUpload(newLivestream.thumbnailFile);
-        if (!thumbnailURL) {
-          alert("Thumbnail upload failed, please try again.");
-          setUploading(false);
-          return;
-        }
-      }      
-  
-      await addDoc(collection(db, "livestreams"), {
-        title: newLivestream.title,
-        description: newLivestream.description,
-        videoURL,
-        type: newLivestream.type,
-        status: newLivestream.status,
-        scheduleDate: newLivestream.status === "scheduled"
-          ? Timestamp.fromDate(new Date(newLivestream.scheduleDate))
-          : null,
-        startTime: newLivestream.startTime
-          ? Timestamp.fromDate(new Date(newLivestream.startTime))
-          : null,
-        endTime: newLivestream.endTime
-          ? Timestamp.fromDate(new Date(newLivestream.endTime))
-          : null,
-        thumbnailURL,
-        createdAt: Timestamp.fromDate(new Date()),
-      });      
-            
-  
-      setNewLivestream({
-        title: "",
-        description: "",
-        videoFile: null,
-        videoURL: "",
-        type: "upload",
-        status: "live",
-        scheduleDate: "",
-        startTime: "",
-        endTime: "",
-        thumbnailFile: null,
-        thumbnailURL: "",
+      let videoURL = newData.videoURL;
+      if (newData.type==="upload"&&newData.videoFile)
+        videoURL = await uploadFile("livestreams", newData.videoFile);
+
+      let thumbnailURL = newData.thumbnailURL;
+      if (newData.thumbnailFile)
+        thumbnailURL = await uploadFile("thumbnails", newData.thumbnailFile);
+
+      const schedTS = newData.status==="scheduled"&&newData.scheduleDate
+        ? Timestamp.fromDate(new Date(newData.scheduleDate))
+        : null;
+      const startTS = schedTS&&newData.startTime
+        ? Timestamp.fromDate(new Date(`${newData.scheduleDate}T${newData.startTime}`))
+        : null;
+      const endTS = schedTS&&newData.endTime
+        ? Timestamp.fromDate(new Date(`${newData.scheduleDate}T${newData.endTime}`))
+        : null;
+
+      await addDoc(collection(db,"livestreams"), {
+        title: newData.title,
+        description: newData.description,
+        type: newData.type,
+        videoURL, thumbnailURL,
+        status: newData.status,
+        scheduleDate: schedTS, startTime: startTS, endTime: endTS,
+        preacher: newData.preacher,
+        songs: newData.songs.split(",").map(s=>s.trim()),
+        activities: newData.activities.split(",").map(a=>a.trim()),
+        sermonNoteId: newData.sermonNoteId,
+        createdAt: Timestamp.now(),
       });
-  
-      fetchLivestreams();
-      alert("Livestream Added Successfully!");
-    } catch (err) {
-      console.error(err);
-      alert("Failed to add livestream.");
+      setNewData({
+        title:"",description:"",type:"upload",videoFile:null,videoURL:"",
+        thumbnailFile:null,thumbnailURL:"",
+        status:"scheduled",scheduleDate:"",startTime:"",endTime:"",
+        preacher:"",songs:"",activities:"",sermonNoteId:"",
+      });
+      await fetchLivestreams();
+    } catch(err) {
+      console.error(err); alert("Add failed");
+    } finally {
+      setAdding(false);
     }
-    setUploading(false);
-  };
-  
+  }
 
-  const deleteLivestream = async (id: string) => {
-    await deleteDoc(doc(db, "livestreams", id));
-    fetchLivestreams();
-  };
+  // ─── DELETE ───────────────────────────────────────────────────────────────
+  async function handleDelete(id:string) {
+    await deleteDoc(doc(db,"livestreams",id));
+    await fetchLivestreams();
+  }
 
-  const handleThumbnailUpload = async (file: File | null) => {
-    if (!file) return null;
-    const storageRef = ref(storage, `thumbnails/${file.name}`);
-    const snapshot = await uploadBytes(storageRef, file);
-    return await getDownloadURL(snapshot.ref);
-  };
-  
+  // ─── EDIT MODAL ──────────────────────────────────────────────────────────
+  function openEdit(ls:LivestreamRecord) {
+    setEditingId(ls.id);
+    setEditData({
+      title: ls.title,
+      description: ls.description,
+      type: ls.type,
+      videoFile: null,
+      videoURL: ls.videoURL,
+      thumbnailFile: null,
+      thumbnailURL: ls.thumbnailURL,
+      status: ls.status,
+      scheduleDate: ls.scheduleDate ? dayjs(ls.scheduleDate).format("YYYY-MM-DD") : "",
+      startTime:    ls.startTime    ? dayjs(ls.startTime).format("HH:mm") : "",
+      endTime:      ls.endTime      ? dayjs(ls.endTime).format("HH:mm") : "",
+      preacher: ls.preacher,
+      songs: ls.songs.join(", "),
+      activities: ls.activities.join(", "),
+      sermonNoteId: ls.sermonNoteId,
+    });
+  }
 
-  const updateLivestream = async (id: string, updatedData: any) => {
-    try {
-      await updateDoc(doc(db, "livestreams", id), updatedData);
-      alert("Livestream updated!");
-      setEditingId(null);
-      fetchLivestreams();
-    } catch (err) {
-      console.error(err);
-      alert("Failed to update livestream.");
-    }
-  };
+  async function saveEdit() {
+    if (!editData || !editingId) return;
+    const id = editingId;
+    const d = editData;
+    const schedTS = d.status==="scheduled"&&d.scheduleDate
+      ? Timestamp.fromDate(new Date(d.scheduleDate))
+      : null;
+    const startTS = schedTS&&d.startTime
+      ? Timestamp.fromDate(new Date(`${d.scheduleDate}T${d.startTime}`))
+      : null;
+    const endTS = schedTS&&d.endTime
+      ? Timestamp.fromDate(new Date(`${d.scheduleDate}T${d.endTime}`))
+      : null;
 
+    let videoURL = d.videoURL;
+    if (d.type==="upload"&&d.videoFile)
+      videoURL = await uploadFile("livestreams",d.videoFile);
+
+    let thumbnailURL = d.thumbnailURL;
+    if (d.thumbnailFile)
+      thumbnailURL = await uploadFile("thumbnails",d.thumbnailFile);
+
+    await updateDoc(doc(db,"livestreams",id), {
+      title: d.title,
+      description: d.description,
+      type: d.type,
+      videoURL, thumbnailURL,
+      status: d.status,
+      scheduleDate: schedTS,
+      startTime: startTS, endTime: endTS,
+      preacher: d.preacher,
+      songs: d.songs.split(",").map(s=>s.trim()),
+      activities: d.activities.split(",").map(a=>a.trim()),
+      sermonNoteId: d.sermonNoteId,
+    });
+
+    setEditingId(null);
+    setEditData(null);
+    await fetchLivestreams();
+  }
+
+  // ─── RENDER ───────────────────────────────────────────────────────────────
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Livestreams</h1>
+    <div className="space-y-8 p-6">
+      <h1 className="text-2xl font-bold">Livestreams</h1>
 
-{/* ✅ Improved "Add Livestream" Form */}
-<div className="p-4 bg-gray-800 rounded-lg mb-8">
-  <h2 className="text-xl font-semibold mb-4">Add Livestream</h2>
-  
-  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-    <input
-      className="p-2 bg-gray-700 rounded"
-      placeholder="Title"
-      value={newLivestream.title}
-      onChange={(e) => setNewLivestream({ ...newLivestream, title: e.target.value })}
-    />
-
-    <textarea
-      className="p-2 bg-gray-700 rounded"
-      placeholder="Description"
-      value={newLivestream.description}
-      onChange={(e) => setNewLivestream({ ...newLivestream, description: e.target.value })}
-    />
-
-    
-
-    <select
-      className="p-2 bg-gray-700 rounded"
-      value={newLivestream.type}
-      onChange={(e) => setNewLivestream({ ...newLivestream, type: e.target.value })}
-    >
-      <option value="upload">Upload Video File</option>
-      <option value="link">YouTube/Vimeo Link</option>
-      <option value="iframe">Iframe Embed Link</option>
-    </select>
-
-    {newLivestream.type === "upload" && (
-      <input
-        type="file"
-        className="p-2 bg-gray-700 rounded"
-        onChange={(e) => setNewLivestream({ ...newLivestream, videoFile: e.target.files?.[0] || null })}
-      />
-    )}
-
-    {(newLivestream.type === "link" || newLivestream.type === "iframe") && (
-      <input
-        className="p-2 bg-gray-700 rounded"
-        placeholder="Video URL or iframe embed link"
-        value={newLivestream.videoURL}
-        onChange={(e) => setNewLivestream({ ...newLivestream, videoURL: e.target.value })}
-      />
-    )}
-
-    <input
-      type="file"
-      accept="image/*"
-      className="p-2 bg-gray-700 rounded"
-      onChange={(e) => setNewLivestream({ ...newLivestream, thumbnailFile: e.target.files?.[0] || null })}
-    />
-
-    <select
-      className="p-2 bg-gray-700 rounded"
-      value={newLivestream.status}
-      onChange={(e) => setNewLivestream({ ...newLivestream, status: e.target.value })}
-    >
-      <option value="live">Live</option>
-      <option value="offline">Offline</option>
-      <option value="scheduled">Scheduled</option>
-    </select>
-    
-
-    {newLivestream.status === "scheduled" && (
-      <input
-        type="datetime-local"
-        className="p-2 bg-gray-700 rounded"
-        value={newLivestream.scheduleDate}
-        onChange={(e) => setNewLivestream({ ...newLivestream, scheduleDate: e.target.value })}
-      />
-    )}
-
-    <input
-      type="datetime-local"
-      className="p-2 bg-gray-700 rounded"
-      value={newLivestream.startTime}
-      onChange={(e) => setNewLivestream({ ...newLivestream, startTime: e.target.value })}
-    />
-
-    <input
-      type="datetime-local"
-      className="p-2 bg-gray-700 rounded"
-      value={newLivestream.endTime}
-      onChange={(e) => setNewLivestream({ ...newLivestream, endTime: e.target.value })}
-    />
-  </div>
-
-  <button
-    onClick={addLivestream}
-    className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg flex items-center"
-  >
-    {uploading ? "Uploading..." : <><UploadCloud className="mr-2" /> Upload & Save</>}
-  </button>
-</div>
-
-
-     {/* ✅ Livestream Cards */}
-     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      {livestreams.map((ls) => (
-        <div key={ls.id}>
-          {editingId === ls.id ? (
-  <div>
-    {/* Title Input */}
-    <input
-      type="text"
-      value={ls.title}
-      onChange={(e) =>
-        setLivestreams((prevLivestreams) =>
-          prevLivestreams.map((stream) =>
-            stream.id === ls.id ? { ...stream, title: e.target.value } : stream
-          )
-        )
-      }
-      className="p-2 bg-gray-700 rounded w-full mb-2"
-      placeholder="Edit Title"
-    />
-
-    {/* Description Input */}
-    <textarea
-      value={ls.description}
-      onChange={(e) =>
-        setLivestreams((prevLivestreams) =>
-          prevLivestreams.map((stream) =>
-            stream.id === ls.id ? { ...stream, description: e.target.value } : stream
-          )
-        )
-      }
-      className="p-2 bg-gray-700 rounded w-full mb-2"
-      placeholder="Edit Description"
-    />
-
-    {/* Status Dropdown */}
-    <select
-      value={ls.status}
-      onChange={(e) =>
-        setLivestreams((prevLivestreams) =>
-          prevLivestreams.map((stream) =>
-            stream.id === ls.id ? { ...stream, status: e.target.value } : stream
-          )
-        )
-      }
-      className="p-2 bg-gray-700 rounded w-full mb-2"
-    >
-      <option value="live">Live</option>
-      <option value="offline">Offline</option>
-      <option value="scheduled">Scheduled</option>
-    </select>
-
-    {/* Scheduled Date Input */}
-    {ls.status === "scheduled" && (
-      <input
-        type="datetime-local"
-        value={ls.scheduleDate ? new Date(ls.scheduleDate).toISOString().slice(0, 16) : ""}
-        onChange={(e) =>
-          setLivestreams((prevLivestreams) =>
-            prevLivestreams.map((stream) =>
-              stream.id === ls.id ? { ...stream, scheduleDate: e.target.value } : stream
-            )
-          )
-        }
-        className="p-2 bg-gray-700 rounded w-full mb-2"
-      />
-    )}
-
-    {/* Start Time Input */}
-    <input
-      type="datetime-local"
-      value={ls.startTime ? new Date(ls.startTime).toISOString().slice(0, 16) : ""}
-      onChange={(e) =>
-        setLivestreams((prevLivestreams) =>
-          prevLivestreams.map((stream) =>
-            stream.id === ls.id ? { ...stream, startTime: e.target.value } : stream
-          )
-        )
-      }
-      className="p-2 bg-gray-700 rounded w-full mb-2"
-    />
-
-    {/* End Time Input */}
-    <input
-      type="datetime-local"
-      value={ls.endTime ? new Date(ls.endTime).toISOString().slice(0, 16) : ""}
-      onChange={(e) =>
-        setLivestreams((prevLivestreams) =>
-          prevLivestreams.map((stream) =>
-            stream.id === ls.id ? { ...stream, endTime: e.target.value } : stream
-          )
-        )
-      }
-      className="p-2 bg-gray-700 rounded w-full mb-2"
-    />
-
-    {/* Action Buttons */}
-    <div className="flex gap-2 mt-2">
-      <button
-        onClick={() => updateLivestream(ls.id, ls)}
-        className="text-green-500 font-semibold"
-      >
-        <Save size={20} /> Save
-      </button>
-      <button
-        onClick={() => setEditingId(null)}
-        className="text-gray-400 font-semibold"
-      >
-        Cancel
-      </button>
-    </div>
-  </div>
-) : (
-  // Display mode here remains unchanged
-  <div className="p-4 bg-gray-800 rounded-lg shadow-md">
-    <div className="relative">
-      {ls.thumbnailURL && (
-        <img
-          src={ls.thumbnailURL}
-          alt="Thumbnail"
-          className="w-full h-48 object-cover rounded"
+      {/* ─ Add Form ─ */}
+      <div className="bg-gray-800 p-4 rounded-lg space-y-4">
+        <h2 className="text-xl font-semibold">New Livestream</h2>
+        <LivestreamForm
+          data={newData}
+          notes={sermonNotes}
+          onChange={onFormChange(setNewData,newData)}
+          onSubmit={handleAdd}
+          submitting={adding}
         />
-      )}
-      <span
-        className={`absolute top-2 left-2 px-2 py-1 text-xs rounded-full ${
-          ls.status === "live"
-            ? "bg-green-600"
-            : ls.status === "offline"
-            ? "bg-gray-600"
-            : "bg-yellow-500"
-        }`}
-      >
-        {ls.status.toUpperCase()}
-      </span>
-    </div>
-    <h3 className="text-xl font-semibold mt-2 text-white">{ls.title}</h3>
-    <p className="text-gray-300">{ls.description}</p>
-    <div className="flex gap-2 mt-2">
-      <button onClick={() => setEditingId(ls.id)} className="text-blue-400">
-        <Pencil size={20} />
-      </button>
-      <button onClick={() => deleteLivestream(ls.id)} className="text-red-500">
-        <Trash2 size={20} />
-      </button>
-    </div>
-  </div>
-)}
-</div>
-))}
-</div>
+      </div>
 
+      {/* ─ List ─ */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {livestreams.map(ls => {
+          const status = computeStatus(ls);
+          return (
+            <div key={ls.id} className="bg-gray-800 p-4 rounded-lg space-y-2">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg">{ls.title}</h3>
+                <span className={`px-2 py-1 text-xs rounded-full ${
+                  status==="live" ? "bg-green-600"
+                  : status==="scheduled" ? "bg-yellow-500"
+                  : "bg-gray-600"
+                }`}>
+                  {status.toUpperCase()}
+                </span>
+              </div>
+              <p className="text-gray-300">{ls.description}</p>
+              {ls.scheduleDate && <p className="text-sm text-gray-400">
+                Scheduled: {dayjs(ls.scheduleDate).format("MMM D, YYYY")}
+              </p>}
+              <p className="text-sm text-gray-400">
+                Starts: {ls.startTime ? dayjs(ls.startTime).format("h:mm A") : "—"}
+              </p>
+              <p className="text-sm text-gray-400">
+                Ends: {ls.endTime ? dayjs(ls.endTime).format("h:mm A") : "—"}
+              </p>
+              <p className="text-sm text-gray-400">Preacher: {ls.preacher}</p>
+              <p className="text-sm text-gray-400">Songs: {ls.songs.join(", ")}</p>
+              <p className="text-sm text-gray-400">
+                Activities: {ls.activities.join(", ")}
+              </p>
+              <p className="text-sm text-gray-400">
+                Sermon Note: {sermonNotes.find(n=>n.id===ls.sermonNoteId)?.title||"—"}
+              </p>
+              <div className="flex space-x-4 mt-2">
+                <button onClick={()=> openEdit(ls)} className="text-blue-400">
+                  <Pencil />
+                </button>
+                <button onClick={()=> handleDelete(ls.id)} className="text-red-500">
+                  <Trash2 />
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
 
-      {/* Chat */}
-      {selectedLivestream && (
-        <div className="mt-10">
-          <ChatBox livestreamId={selectedLivestream} />
+      {/* ─ Edit Modal ─ */}
+      {editingId && editData && (
+        <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50">
+          <div className="bg-gray-900 p-6 w-full max-w-3xl rounded-lg space-y-4 overflow-auto max-h-[90vh]">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">Edit Livestream</h2>
+              <button onClick={()=>setEditingId(null)}><X /></button>
+            </div>
+            <LivestreamForm
+              data={editData}
+              notes={sermonNotes}
+              onChange={onFormChange(setEditData,editData)}
+              onSubmit={saveEdit}
+              submitting={false}
+            />
+          </div>
         </div>
       )}
+
+      {/* ─ Chat for first livestream ─ */}
+      {livestreams[0] && (
+        <div className="mt-8">
+          <ChatBox livestreamId={livestreams[0].id} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── REUSABLE FORM ─────────────────────────────────────────────────────────
+function LivestreamForm({
+  data,
+  notes,
+  onChange,
+  onSubmit,
+  submitting,
+}: {
+  data: FormData;
+  notes: SermonNote[];
+  onChange: (field: keyof FormData) => any;
+  onSubmit: () => void;
+  submitting: boolean;
+}) {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <input value={data.title}        onChange={onChange("title")}
+        className="bg-gray-700 p-2 rounded" placeholder="Title" />
+
+      <textarea value={data.description} onChange={onChange("description")}
+        className="bg-gray-700 p-2 rounded" placeholder="Description" />
+
+      <select value={data.type} onChange={onChange("type")}
+        className="bg-gray-700 p-2 rounded w-full">
+        <option value="upload">Upload Video File</option>
+        <option value="link">External Link</option>
+        <option value="iframe">Embed Iframe</option>
+      </select>
+
+      {data.type==="upload" ? (
+        <input type="file" onChange={onChange("videoFile")}
+          className="bg-gray-700 p-2 rounded w-full" />
+      ) : (
+        <input value={data.videoURL} onChange={onChange("videoURL")}
+          className="bg-gray-700 p-2 rounded w-full"
+          placeholder="Video URL / Iframe code" />
+      )}
+
+      <input type="file" onChange={onChange("thumbnailFile")}
+        className="bg-gray-700 p-2 rounded w-full" />
+
+      <select value={data.status} onChange={onChange("status")}
+        className="bg-gray-700 p-2 rounded w-full">
+        <option value="scheduled">Scheduled</option>
+        <option value="live">Force Live</option>
+        <option value="offline">Force Offline</option>
+      </select>
+
+      {data.status==="scheduled" && (
+        <input type="date" value={data.scheduleDate}
+          onChange={onChange("scheduleDate")}
+          className="bg-gray-700 p-2 rounded w-full" />
+      )}
+
+      <input type="time" value={data.startTime}
+        onChange={onChange("startTime")}
+        className="bg-gray-700 p-2 rounded w-full" />
+
+      <input type="time" value={data.endTime}
+        onChange={onChange("endTime")}
+        className="bg-gray-700 p-2 rounded w-full" />
+
+      <input value={data.preacher} onChange={onChange("preacher")}
+        className="bg-gray-700 p-2 rounded w-full" placeholder="Preacher" />
+
+      <input value={data.songs} onChange={onChange("songs")}
+        className="bg-gray-700 p-2 rounded w-full"
+        placeholder="Songs (comma-separated)" />
+
+      <input value={data.activities} onChange={onChange("activities")}
+        className="bg-gray-700 p-2 rounded w-full"
+        placeholder="Activities (comma-separated)" />
+
+      <select value={data.sermonNoteId} onChange={onChange("sermonNoteId")}
+        className="bg-gray-700 p-2 rounded w-full">
+        <option value="">— Select Sermon Note —</option>
+        {notes.map(n=>(
+          <option key={n.id} value={n.id}>{n.title}</option>
+        ))}
+      </select>
+
+      <button
+        onClick={onSubmit}
+        disabled={submitting}
+        className="col-span-1 md:col-span-2 bg-red-600 px-4 py-2 rounded-lg flex items-center justify-center mt-2"
+      >
+        {submitting
+          ? "Saving…"
+          : <><UploadCloud className="mr-2"/> Save</>}
+      </button>
     </div>
   );
 }

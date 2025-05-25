@@ -1,7 +1,7 @@
 // src/app/frontend/livestream/chat.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, ChangeEvent } from "react";
 import {
   collection,
   addDoc,
@@ -12,53 +12,74 @@ import {
   deleteDoc,
   doc,
   updateDoc,
-  getDoc
+  getDoc,
 } from "firebase/firestore";
+import { onAuthStateChanged, signInAnonymously, signOut, User } from "firebase/auth";
+import { db, auth } from "@/config/firebaseConfig";
 import {
-  signInWithPopup,
-  signOut,
-  signInAnonymously
-} from "firebase/auth";
-import { db, auth, googleProvider } from "@/config/firebaseConfig";
-import {
-  Trash2, Smile, Send, LogOut, LogIn,
-  ThumbsUp, Heart, Laugh
+  Trash2,
+  Smile,
+  Send,
+  LogOut,
+  ThumbsUp,
+  Heart,
+  Laugh,
 } from "lucide-react";
-import EmojiPicker from "emoji-picker-react";
+import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
+
+interface Message {
+  id: string;
+  text: string;
+  name: string;
+  uid: string | null;
+  avatar: string;
+  reactions?: Record<string, string>;
+  timestamp: any;
+}
 
 export default function Chat() {
-  const [messages, setMessages] = useState<any[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [message, setMessage] = useState("");
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
 
-  // Subscribe to messages
+  // 1) Firestore subscription
   useEffect(() => {
-    const q = query(collection(db, "messages"), orderBy("timestamp", "asc"));
-    return onSnapshot(q, (snap) => {
-      setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    const q = query(
+      collection(db, "messages"),
+      orderBy("timestamp", "asc")
+    );
+    return onSnapshot(q, snap => {
+      setMessages(snap.docs.map(d => ({
+        id: d.id,
+        ...(d.data() as Omit<Message, "id">),
+      })));
     });
   }, []);
 
-  // Auth methods
-  const signInWithGoogle = async () => {
-    const res = await signInWithPopup(auth, googleProvider);
-    setUser(res.user);
-  };
-  const signInAsGuest = async () => {
-    const res = await signInAnonymously(auth);
-    setUser({ displayName: "Guest", uid: res.user.uid });
-  };
+  // 2) Auth state: pick up existing user or anon
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (u) => {
+      if (u) {
+        setUser(u);
+      } else {
+        // no user? sign in anonymously
+        const res = await signInAnonymously(auth);
+        setUser(res.user);
+      }
+    });
+    return () => unsub();
+  }, []);
 
-  // Send a message
+  // 3) Send
   const sendMessage = async () => {
-    if (!message.trim()) return;
+    if (!message.trim() || !user) return;
     await addDoc(collection(db, "messages"), {
       text: message,
-      name: user?.displayName || "Guest",
-      uid: user?.uid || null,
-      avatar: user?.photoURL || "/default-avatar.png",
+      name: user.displayName || "Guest",
+      uid: user.uid,
+      avatar: user.photoURL || "/default-avatar.png",
       reactions: {},
       timestamp: serverTimestamp(),
     });
@@ -66,8 +87,8 @@ export default function Chat() {
     setIsTyping(false);
   };
 
-  // Delete own message
-  const deleteMessage = async (id: string, ownerUid: string) => {
+  // 4) Delete
+  const deleteMessage = async (id: string, ownerUid: string | null) => {
     if (user?.uid === ownerUid) {
       await deleteDoc(doc(db, "messages", id));
     } else {
@@ -75,7 +96,7 @@ export default function Chat() {
     }
   };
 
-  // Toggle reactions
+  // 5) Reactions
   const toggleReaction = async (messageId: string, emoji: string) => {
     if (!user) return;
     const ref = doc(db, "messages", messageId);
@@ -83,16 +104,13 @@ export default function Chat() {
     if (!snap.exists()) return;
     const reactions = { ...(snap.data().reactions || {}) };
     const uid = user.uid;
-    if (reactions[uid] === emoji) {
-      delete reactions[uid];
-    } else {
-      reactions[uid] = emoji;
-    }
+    if (reactions[uid] === emoji) delete reactions[uid];
+    else reactions[uid] = emoji;
     await updateDoc(ref, { reactions });
   };
 
-  // Typing indicator
-  const handleTyping = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // 6) Typing
+  const handleTyping = (e: ChangeEvent<HTMLInputElement>) => {
     setMessage(e.target.value);
     setIsTyping(true);
     setTimeout(() => setIsTyping(false), 2000);
@@ -100,35 +118,21 @@ export default function Chat() {
 
   return (
     <div className="w-full h-[500px] border rounded-lg flex flex-col bg-gray-900 text-white">
-      {/* Header */}
+      {/* header */}
       <div className="bg-gray-800 p-3 flex justify-between items-center">
         <span className="font-bold text-lg">Live Chat</span>
-        {user ? (
+        {user && (
           <button
-            onClick={() => { signOut(auth); setUser(null); }}
+            onClick={() => { signOut(auth); }}
             className="text-sm flex items-center"
+            title="Sign out of chat"
           >
             Logout <LogOut className="ml-2 w-4 h-4" />
           </button>
-        ) : (
-          <div className="flex space-x-2">
-            <button
-              onClick={signInWithGoogle}
-              className="text-sm flex items-center bg-blue-600 px-3 py-1 rounded"
-            >
-              Login <LogIn className="ml-2 w-4 h-4" />
-            </button>
-            <button
-              onClick={signInAsGuest}
-              className="text-sm bg-gray-700 px-3 py-1 rounded"
-            >
-              Join as Guest
-            </button>
-          </div>
         )}
       </div>
 
-      {/* Messages */}
+      {/* messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-2">
         {messages.map((msg) => (
           <div
@@ -143,46 +147,48 @@ export default function Chat() {
             <div className="flex-1">
               <strong>{msg.name}:</strong> {msg.text}
               <div className="flex space-x-1 mt-1">
-                {Object.values(msg.reactions || {}).map((r: string, i: number) => (
+                {Object.values(msg.reactions || {}).map((r, i) => (
                   <span key={i} className="text-xl">{r}</span>
                 ))}
               </div>
             </div>
-            {user && (
-              <div className="flex space-x-2">
-                <button onClick={() => toggleReaction(msg.id, "👍")}>
-                  <ThumbsUp className="w-4 h-4"/>
-                </button>
-                <button onClick={() => toggleReaction(msg.id, "❤️")}>
-                  <Heart className="w-4 h-4 text-red-500"/>
-                </button>
-                <button onClick={() => toggleReaction(msg.id, "😂")}>
-                  <Laugh className="w-4 h-4 text-yellow-400"/>
-                </button>
-              </div>
-            )}
+            {/* reaction buttons */}
+            <div className="flex space-x-2">
+              <button onClick={() => toggleReaction(msg.id, "👍")}>
+                <ThumbsUp className="w-4 h-4" />
+              </button>
+              <button onClick={() => toggleReaction(msg.id, "❤️")}>
+                <Heart className="w-4 h-4 text-red-500" />
+              </button>
+              <button onClick={() => toggleReaction(msg.id, "😂")}>
+                <Laugh className="w-4 h-4 text-yellow-400" />
+              </button>
+            </div>
+            {/* delete */}
             {user?.uid === msg.uid && (
               <button
                 onClick={() => deleteMessage(msg.id, msg.uid)}
                 className="text-red-500"
               >
-                <Trash2 className="w-4 h-4"/>
+                <Trash2 className="w-4 h-4" />
               </button>
             )}
           </div>
         ))}
-        {isTyping && <p className="text-sm text-gray-400 mt-2">Someone is typing…</p>}
+        {isTyping && (
+          <p className="text-sm text-gray-400 mt-2">Someone is typing…</p>
+        )}
       </div>
 
-      {/* Input */}
+      {/* input */}
       <div className="p-2 flex items-center space-x-2 border-t bg-gray-800 relative">
         <button onClick={() => setShowEmojiPicker(v => !v)}>
           <Smile className="w-6 h-6 text-white" />
         </button>
         {showEmojiPicker && (
-          <div className="absolute bottom-12 left-0 bg-white rounded-lg shadow-lg z-50 p-2">
+          <div className="absolute bottom-12 left-2 bg-white rounded-lg shadow-lg z-50 p-2">
             <EmojiPicker
-              onEmojiClick={(_, emojiObject) => setMessage(m => m + emojiObject.emoji)}
+              onEmojiClick={(e: EmojiClickData) => setMessage(m => m + e.emoji)}
               width={300}
               height={350}
             />
@@ -192,11 +198,14 @@ export default function Chat() {
           type="text"
           value={message}
           onChange={handleTyping}
-          className="flex-1 p-2 border rounded bg-gray-700 text-white placeholder-gray-400"
           placeholder="Type a message…"
+          className="flex-1 p-2 border rounded bg-gray-700 text-white placeholder-gray-400 focus:outline-none"
         />
-        <button onClick={sendMessage} className="bg-blue-500 text-white px-4 py-2 rounded">
-          <Send className="w-4 h-4"/>
+        <button
+          onClick={sendMessage}
+          className="bg-blue-500 text-white px-4 py-2 rounded"
+        >
+          <Send className="w-4 h-4" />
         </button>
       </div>
     </div>

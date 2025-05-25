@@ -1,11 +1,29 @@
+// src/hooks/useFetchBlogsEvents.ts
+
 import { useEffect, useState } from "react";
 import { db } from "@/config/firebaseConfig";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, DocumentData } from "firebase/firestore";
+
+interface Blog extends DocumentData {
+  id: string;
+  // add other known blog fields here, for example:
+  // title: string;
+  // excerpt?: string;
+  // coverImage?: string;
+}
+
+interface EventItem extends DocumentData {
+  id: string;
+  // add other known event fields here, for example:
+  // title: string;
+  // date: string;
+  // location?: string;
+}
 
 export const useFetchBlogsEvents = () => {
-  const [blogs, setBlogs] = useState([]);
-  const [events, setEvents] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [blogs, setBlogs] = useState<Blog[]>([]);
+  const [events, setEvents] = useState<EventItem[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -14,8 +32,18 @@ export const useFetchBlogsEvents = () => {
         const blogsSnap = await getDocs(collection(db, "blogs"));
         const eventsSnap = await getDocs(collection(db, "events"));
 
-        setBlogs(blogsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        setEvents(eventsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const blogsList: Blog[] = blogsSnap.docs.map((doc) => ({
+          id: doc.id,
+          ...(doc.data() as Omit<Blog, "id">),
+        }));
+
+        const eventsList: EventItem[] = eventsSnap.docs.map((doc) => ({
+          id: doc.id,
+          ...(doc.data() as Omit<EventItem, "id">),
+        }));
+
+        setBlogs(blogsList);
+        setEvents(eventsList);
       } catch (error) {
         console.error("Error fetching blogs/events:", error);
       } finally {

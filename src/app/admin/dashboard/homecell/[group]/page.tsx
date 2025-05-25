@@ -1,25 +1,34 @@
 "use client";
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { db } from "@/config/firebaseConfig";
 import { collection, getDocs } from "firebase/firestore";
 import Link from "next/link";
 
-export default function GroupMembersPage() {
-  const params = useParams();
-  const groupName = decodeURIComponent(params.group as string);
+interface User {
+  id: string;
+  name?: string;
+  email?: string;
+  role?: string;
+  homecell: string;
+}
 
-  const [members, setMembers] = useState<any[]>([]);
+export default function GroupMembersPage() {
+  const { group } = useParams() as { group: string };
+  const groupName = decodeURIComponent(group);
+
+  const [members, setMembers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchMembers = async () => {
       try {
-        const querySnapshot = await getDocs(collection(db, "users"));
-        const filtered = querySnapshot.docs
-          .map((doc) => ({ id: doc.id, ...doc.data() }))
-          .filter((user) => user.homecell === groupName);
-
+        const snapshot = await getDocs(collection(db, "users"));
+        const allUsers: User[] = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...(doc.data() as Omit<User, "id">),
+        }));
+        const filtered = allUsers.filter((user) => user.homecell === groupName);
         setMembers(filtered);
       } catch (error) {
         console.error("Error fetching members:", error);
@@ -34,7 +43,8 @@ export default function GroupMembersPage() {
   return (
     <div className="p-6 text-white">
       <h1 className="text-2xl font-bold mb-4">
-        Members in Homecell Group: <span className="text-yellow-400">{groupName}</span>
+        Members in Homecell Group:{" "}
+        <span className="text-yellow-400">{groupName}</span>
       </h1>
 
       <Link href="/admin/dashboard/homecell">
@@ -62,7 +72,7 @@ export default function GroupMembersPage() {
                 <tr key={member.id}>
                   <td className="p-2">{member.name || "Unnamed"}</td>
                   <td className="p-2">{member.email || "N/A"}</td>
-                  <td className="p-2">{member.role}</td>
+                  <td className="p-2">{member.role || "N/A"}</td>
                 </tr>
               ))}
             </tbody>

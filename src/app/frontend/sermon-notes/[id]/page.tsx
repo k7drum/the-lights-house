@@ -47,7 +47,11 @@ export default function SermonDetailPage() {
       const snapshot = await getDocs(collection(db, "sermons"));
       const all = snapshot.docs
         .map((doc) => ({ id: doc.id, ...doc.data() } as Sermon))
-        .filter((s) => s.id !== id && tags.some((tag) => s.tags?.includes(tag)));
+        .filter(
+          (s) =>
+            s.id !== id &&
+            tags.some((tag) => s.tags?.includes(tag))
+        );
       setRelatedSermons(all.slice(0, 3));
     };
 
@@ -66,12 +70,14 @@ export default function SermonDetailPage() {
     a.click();
   };
 
-  if (error) return <p className="text-red-500 text-center mt-6">{error}</p>;
-  if (!sermon) return <p className="text-center text-gray-400 mt-6">Loading sermon...</p>;
+  if (error)
+    return <p className="text-red-500 text-center mt-6">{error}</p>;
+  if (!sermon)
+    return <p className="text-center text-gray-400 mt-6">Loading sermon...</p>;
 
   return (
     <div className="bg-black text-white min-h-screen px-6 py-16">
-      {/* ✅ Back to All Sermons */}
+      {/* Back to All Sermons */}
       <div className="mb-8">
         <Link
           href="/frontend/sermon-notes"
@@ -82,20 +88,22 @@ export default function SermonDetailPage() {
         </Link>
       </div>
 
-      {/* ✅ Title Centered */}
+      {/* Title Centered */}
       <motion.div
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
         className="text-center mb-10"
       >
-        <h1 className="text-4xl md:text-5xl font-extrabold mb-2">{sermon.title}</h1>
+        <h1 className="text-4xl md:text-5xl font-extrabold mb-2">
+          {sermon.title}
+        </h1>
         <p className="text-sm text-gray-400 italic">
-          {dayjs(sermon.date).format("MMMM D, YYYY")} &mdash; by {sermon.speaker}
+          {dayjs(sermon.date).format("MMMM D, YYYY")} — by {sermon.speaker}
         </p>
       </motion.div>
 
-      {/* ✅ Audio Player */}
+      {/* Audio Player */}
       {sermon.audioUrl && (
         <div className="mb-8 text-center">
           <audio controls className="w-full max-w-xl mx-auto">
@@ -105,7 +113,7 @@ export default function SermonDetailPage() {
         </div>
       )}
 
-      {/* ✅ Image/Thumbnail */}
+      {/* Image/Thumbnail */}
       {sermon.fileUrl && (
         <motion.div
           initial={{ opacity: 0 }}
@@ -122,7 +130,7 @@ export default function SermonDetailPage() {
         </motion.div>
       )}
 
-      {/* ✅ Print & Download Buttons */}
+      {/* Print & Download Buttons */}
       <div className="flex flex-wrap gap-4 justify-center mb-10">
         <button
           onClick={handlePrint}
@@ -138,7 +146,7 @@ export default function SermonDetailPage() {
         </button>
       </div>
 
-      {/* ✅ Main Content */}
+      {/* Main Content */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -150,8 +158,8 @@ export default function SermonDetailPage() {
         ))}
       </motion.div>
 
-      {/* ✅ Tags */}
-      {sermon.tags?.length > 0 && (
+      {/* Tags */}
+      {sermon.tags && sermon.tags.length > 0 && (
         <div className="mt-10">
           <h4 className="text-lg font-semibold text-yellow-500 mb-2">Tags:</h4>
           <div className="flex flex-wrap gap-2">
@@ -167,7 +175,7 @@ export default function SermonDetailPage() {
         </div>
       )}
 
-      {/* ✅ Related Sermons */}
+      {/* Related Sermons */}
       <div className="mt-20">
         <h2 className="text-2xl font-bold mb-6 border-b border-gray-700 pb-2">
           Related Sermons

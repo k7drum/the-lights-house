@@ -1,14 +1,24 @@
 "use client";
-import { useEffect, useState } from "react";
+
+import { useEffect, useState, ChangeEvent, FormEvent } from "react";
 import { db } from "@/config/firebaseConfig";
 import { collection, addDoc, getDocs } from "firebase/firestore";
 import { useAuth } from "@/hooks/useAuth";
 import { useRouter } from "next/navigation";
-import Modal from "@/components/Modal"; // ✅ Optional: Create a reusable modal component
-import emailjs from "@emailjs/browser"; // ✅ Install via npm if not installed
+import Modal from "@/components/Modal";
+import emailjs from "@emailjs/browser";
+
+interface Homecell {
+  id: string;
+  name: string;
+  location?: string;
+  leader?: string;
+  meetingTime?: string;
+  // add any other fields you store on each homecell
+}
 
 export default function HomecellRequestPage() {
-  const [homecells, setHomecells] = useState([]);
+  const [homecells, setHomecells] = useState<Homecell[]>([]);
   const [form, setForm] = useState({
     fullName: "",
     phone: "",
@@ -28,16 +38,29 @@ export default function HomecellRequestPage() {
   const fetchHomecells = async () => {
     try {
       const snapshot = await getDocs(collection(db, "homecells"));
-      const list = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      const list: Homecell[] = snapshot.docs.map((d) => ({
+        id: d.id,
+        ...(d.data() as Omit<Homecell, "id">),
+      }));
       setHomecells(list);
     } catch (error) {
       console.error("Error fetching homecells:", error);
     }
   };
 
-  const handleSubmit = async (e: any) => {
+  const handleChange = (
+    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+  ) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!user) return alert("You must be logged in to request a homecell.");
+    if (!user) {
+      alert("You must be logged in to request a homecell.");
+      return;
+    }
 
     try {
       setSubmitting(true);
@@ -49,7 +72,7 @@ export default function HomecellRequestPage() {
         submittedAt: new Date(),
       });
 
-      // ✅ Optional: Send email notification via EmailJS (configure ENV vars)
+      // Optional: send email notification via EmailJS
       await emailjs.send(
         process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID!,
         process.env.NEXT_PUBLIC_EMAILJS_TEMPLATE_ID!,
@@ -63,7 +86,7 @@ export default function HomecellRequestPage() {
         process.env.NEXT_PUBLIC_EMAILJS_USER_ID!
       );
 
-      setShowModal(true); // ✅ Show thank-you modal
+      setShowModal(true);
       setForm({
         fullName: "",
         phone: "",
@@ -79,53 +102,65 @@ export default function HomecellRequestPage() {
     }
   };
 
-  if (loading) return <p className="text-center text-gray-400">Checking authentication...</p>;
-  if (!user) return <p className="text-center text-red-500">Please log in to access this page.</p>;
+  if (loading) {
+    return <p className="text-center text-gray-400">Checking authentication...</p>;
+  }
+  if (!user) {
+    return <p className="text-center text-red-500">Please log in to access this page.</p>;
+  }
 
   return (
     <div className="p-6 max-w-2xl mx-auto text-white">
       <h1 className="text-2xl font-bold mb-4">Join a Homecell Group</h1>
 
-      <form onSubmit={handleSubmit} className="space-y-4 bg-gray-800 p-4 rounded-lg shadow-md">
+      <form
+        onSubmit={handleSubmit}
+        className="space-y-4 bg-gray-800 p-4 rounded-lg shadow-md"
+      >
         <input
           type="text"
+          name="fullName"
           placeholder="Full Name"
           value={form.fullName}
-          onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+          onChange={handleChange}
           className="w-full p-2 bg-gray-700 rounded"
           required
         />
         <input
           type="tel"
+          name="phone"
           placeholder="Phone Number"
           value={form.phone}
-          onChange={(e) => setForm({ ...form, phone: e.target.value })}
+          onChange={handleChange}
           className="w-full p-2 bg-gray-700 rounded"
           required
         />
         <input
           type="number"
+          name="age"
           placeholder="Age"
           value={form.age}
-          onChange={(e) => setForm({ ...form, age: e.target.value })}
+          onChange={handleChange}
           className="w-full p-2 bg-gray-700 rounded"
         />
         <textarea
+          name="faithJourney"
           placeholder="Briefly describe your faith journey or spiritual needs"
           value={form.faithJourney}
-          onChange={(e) => setForm({ ...form, faithJourney: e.target.value })}
+          onChange={handleChange}
           className="w-full p-2 bg-gray-700 rounded"
         />
         <select
+          name="homecell"
           value={form.homecell}
-          onChange={(e) => setForm({ ...form, homecell: e.target.value })}
+          onChange={handleChange}
           className="w-full p-2 bg-gray-700 rounded"
           required
         >
           <option value="">Select Homecell</option>
-          {homecells.map((hc: any) => (
+          {homecells.map((hc) => (
             <option key={hc.id} value={hc.name}>
-              {hc.name} ({hc.location})
+              {hc.name} {hc.location && `(${hc.location})`}
             </option>
           ))}
         </select>
@@ -139,7 +174,6 @@ export default function HomecellRequestPage() {
         </button>
       </form>
 
-      {/* ✅ Modal Component */}
       {showModal && (
         <Modal onClose={() => setShowModal(false)} title="Thank You!">
           <p>Your homecell request has been submitted. We’ll contact you shortly.</p>

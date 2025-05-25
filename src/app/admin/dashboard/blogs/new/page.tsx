@@ -11,25 +11,26 @@ export default function AddNewBlog() {
   const [content, setContent] = useState("");
   const [category, setCategory] = useState("");
   const [customCategory, setCustomCategory] = useState("");
-  const [categories, setCategories] = useState([]); // Store user-defined categories
-  const [tags, setTags] = useState([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [tags, setTags] = useState<string[]>([]);
   const [authorName, setAuthorName] = useState("");
   const [authorBio, setAuthorBio] = useState("");
   const [authorImage, setAuthorImage] = useState("");
   const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState("draft"); // "draft" or "published"
+  const [status, setStatus] = useState<"draft" | "published">("draft");
+
   const router = useRouter();
 
   // ✅ Handle Adding Tags
-  const addTag = (e) => {
-    if (e.key === "Enter" && e.target.value) {
-      setTags([...tags, e.target.value]);
-      e.target.value = "";
+  const addTag = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && e.currentTarget.value) {
+      setTags([...tags, e.currentTarget.value]);
+      e.currentTarget.value = "";
     }
   };
 
   // ✅ Remove Tag
-  const removeTag = (index) => {
+  const removeTag = (index: number) => {
     setTags(tags.filter((_, i) => i !== index));
   };
 
@@ -54,7 +55,7 @@ export default function AddNewBlog() {
         title,
         description,
         content,
-        category: category || categories[0], // Use selected or first custom category
+        category: category || categories[0],
         tags,
         author: {
           name: authorName,
@@ -66,7 +67,7 @@ export default function AddNewBlog() {
       });
 
       alert(publish ? "Blog published successfully!" : "Blog saved as draft!");
-      router.push("/admin/dashboard/blogs"); // Redirect back
+      router.push("/admin/dashboard/blogs");
     } catch (error) {
       console.error("Error saving blog:", error);
     } finally {
@@ -78,29 +79,34 @@ export default function AddNewBlog() {
     <div className="p-6">
       <h1 className="text-3xl font-bold mb-4">Add New Blog</h1>
 
-      {/* ✅ Blog Title */}
+      {/* Title */}
       <div className="mb-4">
         <label className="block text-gray-400">Title</label>
         <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="p-2 bg-gray-700 rounded w-full" />
       </div>
 
-      {/* ✅ Blog Description */}
+      {/* Description */}
       <div className="mb-4">
         <label className="block text-gray-400">Description</label>
         <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} className="p-2 bg-gray-700 rounded w-full" />
       </div>
 
-      {/* ✅ Blog Content */}
+      {/* Content */}
       <div className="mb-4">
         <label className="block text-gray-400">Content</label>
         <textarea value={content} onChange={(e) => setContent(e.target.value)} className="p-2 bg-gray-700 rounded w-full h-32"></textarea>
       </div>
 
-      {/* ✅ Custom Categories */}
+      {/* Custom Categories */}
       <div className="mb-4">
         <label className="block text-gray-400">Add Custom Category</label>
         <div className="flex">
-          <input type="text" value={customCategory} onChange={(e) => setCustomCategory(e.target.value)} className="p-2 bg-gray-700 rounded w-full mr-2" />
+          <input
+            type="text"
+            value={customCategory}
+            onChange={(e) => setCustomCategory(e.target.value)}
+            className="p-2 bg-gray-700 rounded w-full mr-2"
+          />
           <button onClick={addCategory} className="px-4 py-2 bg-blue-500 text-white rounded">Add</button>
         </div>
         <div className="mt-2 flex flex-wrap">
@@ -110,7 +116,7 @@ export default function AddNewBlog() {
         </div>
       </div>
 
-      {/* ✅ Categories Selection */}
+      {/* Select Category */}
       <div className="mb-4">
         <label className="block text-gray-400">Select Category</label>
         <select value={category} onChange={(e) => setCategory(e.target.value)} className="p-2 bg-gray-700 rounded w-full">
@@ -121,7 +127,7 @@ export default function AddNewBlog() {
         </select>
       </div>
 
-      {/* ✅ Tags Input */}
+      {/* Tags Input */}
       <div className="mb-4">
         <label className="block text-gray-400">Tags (Press Enter to Add)</label>
         <input type="text" onKeyDown={addTag} className="p-2 bg-gray-700 rounded w-full" />
@@ -135,7 +141,7 @@ export default function AddNewBlog() {
         </div>
       </div>
 
-      {/* ✅ Author Information */}
+      {/* Author Info */}
       <div className="mb-4">
         <h2 className="text-lg font-semibold mb-2 text-gray-300">Author Information</h2>
         <label className="block text-gray-400">Author Name</label>
@@ -148,7 +154,7 @@ export default function AddNewBlog() {
         <input type="text" value={authorImage} onChange={(e) => setAuthorImage(e.target.value)} className="p-2 bg-gray-700 rounded w-full" />
       </div>
 
-      {/* ✅ Save Buttons */}
+      {/* Save Buttons */}
       <div className="flex space-x-4">
         <button onClick={() => saveBlog(false)} disabled={loading} className="px-4 py-2 bg-gray-500 text-white rounded-lg flex items-center">
           <Save className="mr-2" /> {loading ? "Saving..." : "Save as Draft"}

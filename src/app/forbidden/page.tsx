@@ -1,55 +1,106 @@
+// src/app/admin/layout.tsx
 "use client";
-import Link from "next/link";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { auth } from "@/config/firebaseConfig";
-import { onAuthStateChanged } from "firebase/auth";
-import { Lock, Home, LogIn } from "lucide-react";
 
-export default function ForbiddenPage() {
-  const [user, setUser] = useState(null);
+import React, { useEffect, useState, ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { auth, db } from "@/config/firebaseConfig";
+import { onAuthStateChanged } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+import Sidebar from "@/components/admin/Sidebar";
+
+interface AdminLayoutProps {
+  children: ReactNode;
+}
+
+// 🔹 Inactivity logout hook (15 mins)
+function useInactivityLogout(timeout = 15 * 60 * 1000) {
   const router = useRouter();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
+    let timer: NodeJS.Timeout;
+
+    const resetTimer = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        alert("You have been logged out due to inactivity.");
+        auth.signOut().then(() => {
+          router.push("/auth/login");
+        });
+      }, timeout);
+    };
+
+    ["mousemove", "keydown", "scroll", "click"].forEach((evt) =>
+      window.addEventListener(evt, resetTimer)
+    );
+
+    resetTimer();
+
+    return () => {
+      clearTimeout(timer);
+      ["mousemove", "keydown", "scroll", "click"].forEach((evt) =>
+        window.removeEventListener(evt, resetTimer)
+      );
+    };
+  }, [router, timeout]);
+}
+
+export default function AdminLayout({ children }: AdminLayoutProps) {
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Enable inactivity logout
+  useInactivityLogout();
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        // not logged in
+        router.push("/auth/login");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        // fetch role from Firestore
+        const snap = await getDoc(doc(db, "users", user.uid));
+        const role = snap.data()?.role || "user";
+
+        if (role === "admin") {
+          setIsAdmin(true);
+        } else {
+          // logged in but not admin
+          router.push("/forbidden");
+        }
+      } catch (err) {
+        console.error("Error checking admin role:", err);
+        router.push("/auth/login");
+      } finally {
+        setLoading(false);
+      }
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [router]);
 
-  return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white text-center">
-      <Lock size={64} className="text-red-500 mb-4" />
-      <h1 className="text-3xl font-bold">403 - Forbidden</h1>
-      <p className="text-gray-400 mt-2">
-        You don’t have permission to access this page.
-      </p>
-
-      {!user ? (
-        <p className="text-gray-400 mt-2">
-          Please log in with an authorized account.
-        </p>
-      ) : (
-        <p className="text-gray-400 mt-2">
-          If you believe this is an error, contact an admin for assistance.
-        </p>
-      )}
-
-      <div className="mt-6 space-x-4">
-        <Link href="/">
-          <button className="px-6 py-3 bg-blue-500 text-white rounded-lg flex items-center gap-2 hover:bg-blue-600">
-            <Home size={20} /> Go Home
-          </button>
-        </Link>
-        {!user && (
-          <Link href="/auth/login">
-            <button className="px-6 py-3 bg-green-500 text-white rounded-lg flex items-center gap-2 hover:bg-green-600">
-              <LogIn size={20} /> Login
-            </button>
-          </Link>
-        )}
+  if (loading) {
+    return (
+      <div className="h-screen flex items-center justify-center text-white">
+        Checking access...
       </div>
+    );
+  }
+
+  if (!isAdmin) {
+    // once loading is done, if not admin we already redirected, so render nothing
+    return null;
+  }
+
+  // only admin sees the sidebar + children
+  return (
+    <div className="flex h-screen">
+      <Sidebar />
+      <main className="flex-1 p-4 overflow-y-auto">{children}</main>
     </div>
   );
 }

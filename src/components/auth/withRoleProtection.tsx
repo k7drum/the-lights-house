@@ -1,11 +1,16 @@
+// src/components/auth/withRoleProtection.tsx
 "use client";
+
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { auth, db } from "@/config/firebaseConfig";
 import { doc, getDoc } from "firebase/firestore";
 import { Loader } from "lucide-react";
 
-export default function withRoleProtection(Component: any, allowedRoles: string[] = []) {
+export default function withRoleProtection(
+  Component: any,
+  allowedRoles: string[] = ["admin"]   // ← default to admin
+) {
   return function ProtectedComponent(props: any) {
     const [authorized, setAuthorized] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -14,7 +19,7 @@ export default function withRoleProtection(Component: any, allowedRoles: string[
     useEffect(() => {
       const unsubscribe = auth.onAuthStateChanged(async (user) => {
         if (!user) {
-          router.push("/auth/login"); // Redirect if not logged in
+          router.push("/auth/login");
           return;
         }
 
@@ -25,7 +30,7 @@ export default function withRoleProtection(Component: any, allowedRoles: string[
           if (allowedRoles.includes(role)) {
             setAuthorized(true);
           } else {
-            router.push("/forbidden"); // 🚨 Redirect unauthorized users
+            router.push("/forbidden");
           }
         } catch (error) {
           console.error("Error fetching user role:", error);
@@ -35,7 +40,7 @@ export default function withRoleProtection(Component: any, allowedRoles: string[
         setLoading(false);
       });
 
-      return () => unsubscribe(); // Cleanup listener
+      return () => unsubscribe();
     }, [router]);
 
     if (loading) {

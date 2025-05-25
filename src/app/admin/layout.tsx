@@ -1,81 +1,94 @@
+// src/app/admin/layout.tsx
 "use client";
-import { useEffect, useState } from "react";
+
+import React, { ReactNode, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { auth, db } from "@/config/firebaseConfig";
+import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import Sidebar from "@/components/admin/Sidebar";
+
+interface AdminLayoutProps {
+  children: ReactNode;
+}
 
 // 🔹 Inactivity logout hook (15 mins)
 function useInactivityLogout(timeout = 15 * 60 * 1000) {
   const router = useRouter();
-
   useEffect(() => {
     let timer: NodeJS.Timeout;
-
     const resetTimer = () => {
       clearTimeout(timer);
       timer = setTimeout(() => {
         alert("You have been logged out due to inactivity.");
-        auth.signOut().then(() => {
-          router.push("/auth/login");
-        });
+        auth.signOut().then(() => router.replace("/auth/login"));
       }, timeout);
     };
-
-    const events = ["mousemove", "keydown", "scroll", "click"];
-
-    events.forEach((event) => {
-      window.addEventListener(event, resetTimer);
-    });
-
-    resetTimer(); // Start on load
-
+    ["mousemove", "keydown", "scroll", "click"].forEach((e) =>
+      window.addEventListener(e, resetTimer)
+    );
+    resetTimer();
     return () => {
       clearTimeout(timer);
-      events.forEach((event) => {
-        window.removeEventListener(event, resetTimer);
-      });
+      ["mousemove", "keydown", "scroll", "click"].forEach((e) =>
+        window.removeEventListener(e, resetTimer)
+      );
     };
   }, [router, timeout]);
 }
 
-export default function AdminLayout({ children }) {
+export default function AdminLayout({ children }: AdminLayoutProps) {
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const router = useRouter();
 
-  // ✅ Enable inactivity logout
+  // enable inactivity logout
   useInactivityLogout();
 
   useEffect(() => {
-    const checkAdmin = async () => {
-      const user = auth.currentUser;
+    // subscribe to auth changes
+    const unsub = onAuthStateChanged(auth, async (user) => {
       if (!user) {
-        router.push("/auth/login");
+        // not logged in → go to login
+        router.replace("/auth/login");
         return;
       }
-
-      const userDoc = await getDoc(doc(db, "users", user.uid));
-      const role = userDoc.data()?.role || "user";
-
-      if (role === "admin") {
-        setIsAdmin(true);
-      } else {
-        router.push("/");
+      try {
+        // check role
+        const snap = await getDoc(doc(db, "users", user.uid));
+        const role = snap.data()?.role;
+        if (role === "admin") {
+          setIsAdmin(true);
+        } else {
+          // logged in but not admin → forbidden
+          router.replace("/forbidden");
+        }
+      } catch (err) {
+        console.error("Checking admin role failed:", err);
+        router.replace("/auth/login");
+      } finally {
+        setLoading(false);
       }
+    });
 
-      setLoading(false);
-    };
-
-    checkAdmin();
+    return () => unsub();
   }, [router]);
 
-  if (loading) return <div className="h-screen flex items-center justify-center text-white">Checking access...</div>;
+  if (loading) {
+    return (
+      <div className="h-screen flex items-center justify-center text-white">
+        Checking access…
+      </div>
+    );
+  }
 
-  return isAdmin ? (
+  // only render children if admin
+  if (!isAdmin) return null;
+
+  return (
     <div className="flex h-screen">
       <Sidebar />
-      <div className="flex-1 p-4 overflow-y-auto">{children}</div>
+      <main className="flex-1 p-4 overflow-y-auto">{children}</main>
     </div>
-  ) : null;
+  );
 }

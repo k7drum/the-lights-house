@@ -24,7 +24,6 @@ export default function ServiceAttendance() {
     fetchAttendanceRecords();
   }, []);
 
-  // ✅ Fetch Attendance Records
   const fetchAttendanceRecords = async () => {
     try {
       const querySnapshot = await getDocs(collection(db, "attendance"));
@@ -35,7 +34,6 @@ export default function ServiceAttendance() {
     }
   };
 
-  // ✅ Save or Update Attendance Record
   const saveAttendance = async () => {
     if (!newAttendance.date || !newAttendance.serviceType) {
       alert("Please select date and service type!");
@@ -43,18 +41,22 @@ export default function ServiceAttendance() {
     }
 
     const totalAttendees =
-      Number(newAttendance.maleCount) +
-      Number(newAttendance.femaleCount) +
-      Number(newAttendance.childrenCount) +
-      Number(newAttendance.newcomers);
+      newAttendance.maleCount +
+      newAttendance.femaleCount +
+      newAttendance.childrenCount +
+      newAttendance.newcomers;
 
     try {
       if (editingRecord) {
-        // Update existing record
-        await updateDoc(doc(db, "attendance", editingRecord.id), { ...newAttendance, totalAttendees });
+        await updateDoc(doc(db, "attendance", editingRecord.id), {
+          ...newAttendance,
+          totalAttendees,
+        });
       } else {
-        // Add new record
-        await addDoc(collection(db, "attendance"), { ...newAttendance, totalAttendees });
+        await addDoc(collection(db, "attendance"), {
+          ...newAttendance,
+          totalAttendees,
+        });
       }
 
       setNewAttendance({
@@ -74,7 +76,6 @@ export default function ServiceAttendance() {
     }
   };
 
-  // ✅ Edit Attendance Record
   const editAttendance = (record: any) => {
     setEditingRecord(record);
     setNewAttendance({
@@ -88,7 +89,6 @@ export default function ServiceAttendance() {
     });
   };
 
-  // ✅ Delete Attendance Record
   const deleteAttendance = async (id: string) => {
     if (!confirm("Are you sure you want to delete this record?")) return;
     try {
@@ -100,7 +100,6 @@ export default function ServiceAttendance() {
     }
   };
 
-  // ✅ Export Attendance Data to Excel
   const exportToExcel = () => {
     const worksheet = XLSX.utils.json_to_sheet(attendanceRecords);
     const workbook = XLSX.utils.book_new();
@@ -108,7 +107,6 @@ export default function ServiceAttendance() {
     XLSX.writeFile(workbook, "attendance_records.xlsx");
   };
 
-  // ✅ Export Attendance Data to PDF
   const exportToPDF = () => {
     const doc = new jsPDF();
     doc.text("Service Attendance Records", 20, 10);
@@ -160,7 +158,9 @@ export default function ServiceAttendance() {
           type="number"
           min="0"
           value={newAttendance.maleCount}
-          onChange={(e) => setNewAttendance({ ...newAttendance, maleCount: e.target.value })}
+          onChange={(e) =>
+            setNewAttendance({ ...newAttendance, maleCount: parseInt(e.target.value) || 0 })
+          }
           className="p-2 bg-gray-700 rounded w-full mb-2"
         />
 
@@ -169,7 +169,9 @@ export default function ServiceAttendance() {
           type="number"
           min="0"
           value={newAttendance.femaleCount}
-          onChange={(e) => setNewAttendance({ ...newAttendance, femaleCount: e.target.value })}
+          onChange={(e) =>
+            setNewAttendance({ ...newAttendance, femaleCount: parseInt(e.target.value) || 0 })
+          }
           className="p-2 bg-gray-700 rounded w-full mb-2"
         />
 
@@ -178,7 +180,9 @@ export default function ServiceAttendance() {
           type="number"
           min="0"
           value={newAttendance.childrenCount}
-          onChange={(e) => setNewAttendance({ ...newAttendance, childrenCount: e.target.value })}
+          onChange={(e) =>
+            setNewAttendance({ ...newAttendance, childrenCount: parseInt(e.target.value) || 0 })
+          }
           className="p-2 bg-gray-700 rounded w-full mb-2"
         />
 
@@ -187,7 +191,9 @@ export default function ServiceAttendance() {
           type="number"
           min="0"
           value={newAttendance.newcomers}
-          onChange={(e) => setNewAttendance({ ...newAttendance, newcomers: e.target.value })}
+          onChange={(e) =>
+            setNewAttendance({ ...newAttendance, newcomers: parseInt(e.target.value) || 0 })
+          }
           className="p-2 bg-gray-700 rounded w-full mb-2"
         />
 
@@ -198,8 +204,19 @@ export default function ServiceAttendance() {
 
       {/* Attendance History */}
       <div className="mt-6 bg-gray-800 p-4 rounded-lg shadow-md">
-        <h2 className="text-lg font-semibold mb-2">Attendance History</h2>
-        <table className="w-full text-left">
+        <div className="flex justify-between items-center mb-2">
+          <h2 className="text-lg font-semibold">Attendance History</h2>
+          <div className="flex gap-2">
+            <button onClick={exportToExcel} className="bg-green-600 px-3 py-1 rounded text-white text-sm">
+              Export Excel
+            </button>
+            <button onClick={exportToPDF} className="bg-blue-600 px-3 py-1 rounded text-white text-sm">
+              Export PDF
+            </button>
+          </div>
+        </div>
+
+        <table className="w-full text-left text-sm">
           <thead>
             <tr>
               <th className="p-2">Date</th>
