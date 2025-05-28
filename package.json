@@ -26,6 +26,7 @@
     "@emotion/styled": "^11.14.0",
     "@react-page/plugins-image": "^5.4.5",
     "@tailwindcss/aspect-ratio": "^0.4.2",
+    "@tailwindcss/oxide": "^4.1.7",
     "chart.js": "^4.4.8",
     "dayjs": "^1.11.13",
     "emailjs-com": "^3.2.0",
