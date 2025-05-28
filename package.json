@@ -9,12 +9,14 @@
     "export": "next export",
     "predeploy": "npm run build && npm run export",
     "deploy": "firebase deploy --only hosting",
+    "pages:build":"npx @cloudflare/next-on-pages",
     "lint": "next lint"
   },
   "resolutions": {
     "react-dnd": "^16.0.1",
     "react-dnd-html5-backend": "^16.0.1",
     "@react-page/editor/react": "^18.2.0"
+    
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -55,7 +57,13 @@
   "optionalDependencies": {
     "@tailwindcss/oxide-linux-x64-gnu": "^4.1.7"
   },
+
+"overrides": {
+    "@tailwindcss/oxide": "@tailwindcss/oxide-linux-x64-gnu"
+  },
+
   "devDependencies": {
+    "@cloudflare/next-on-pages": "^1.13.12",
     "@eslint/eslintrc": "^3",
     "@tailwindcss/line-clamp": "^0.4.4",
     "@tailwindcss/postcss": "^4",
