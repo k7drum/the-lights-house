@@ -9,14 +9,13 @@
     "export": "next export",
     "predeploy": "npm run build && npm run export",
     "deploy": "firebase deploy --only hosting",
-    "pages:build":"npx @cloudflare/next-on-pages",
+    "pages:build": "npx @cloudflare/next-on-pages",
     "lint": "next lint"
   },
   "resolutions": {
     "react-dnd": "^16.0.1",
     "react-dnd-html5-backend": "^16.0.1",
     "@react-page/editor/react": "^18.2.0"
-    
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -27,7 +26,6 @@
     "@emotion/styled": "^11.14.0",
     "@react-page/plugins-image": "^5.4.5",
     "@tailwindcss/aspect-ratio": "^0.4.2",
-    "@tailwindcss/oxide-win32-x64-msvc": "^4.1.7",
     "chart.js": "^4.4.8",
     "dayjs": "^1.11.13",
     "emailjs-com": "^3.2.0",
@@ -54,15 +52,6 @@
     "react-quill": "^0.0.2",
     "xlsx": "^0.18.5"
   },
-  "optionalDependencies": {
-    "@tailwindcss/oxide-linux-x64-gnu": "^4.1.7"
-  },
-
-"overrides": {
-    "@tailwindcss/oxide": "@tailwindcss/oxide-linux-x64-gnu",
-    "@tailwindcss/oxide-win32-x64-msvc": "@tailwindcss/oxide-linux-x64-gnu"
-  },
-
   "devDependencies": {
     "@cloudflare/next-on-pages": "^1.13.12",
     "@eslint/eslintrc": "^3",

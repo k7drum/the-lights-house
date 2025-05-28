@@ -5,17 +5,15 @@ const nextConfig = {
     domains: ["lh3.googleusercontent.com"],
   },
 
-  // Ignore ESLint errors during `next build`
+  // Skip ESLint and TypeScript errors during build
   eslint: {
     ignoreDuringBuilds: true,
   },
-
-  // Ignore TypeScript errors during `next build`
   typescript: {
     ignoreBuildErrors: true,
   },
 
-  // Preserve your existing redirect
+  // Redirect root → /frontend/home
   async redirects() {
     return [
       {
@@ -26,14 +24,23 @@ const nextConfig = {
     ];
   },
 
-  // Patch webpack so that any import of `react/jsx-runtime.js` or `react/jsx-dev-runtime.js`
-  // (which some older libraries still try to pull in) is redirected to the real exports.
+  // Patch out any legacy imports of the native-tailwind-oxide binaries
+  // and fix React-DnD’s import of jsx-runtime
   webpack(config) {
+    // Redirect oxide imports to the JS version (built into tailwindcss)
+    if (config.resolve.alias) {
+      delete config.resolve.alias["@tailwindcss/oxide"];
+      delete config.resolve.alias["@tailwindcss/oxide-linux-x64-gnu"];
+      delete config.resolve.alias["@tailwindcss/oxide-win32-x64-msvc"];
+    }
+
+    // Fix libraries still trying to pull in these paths
     config.resolve.alias = {
       ...(config.resolve.alias || {}),
       "react/jsx-runtime.js": require.resolve("react/jsx-runtime"),
       "react/jsx-dev-runtime.js": require.resolve("react/jsx-dev-runtime"),
     };
+
     return config;
   },
 };
