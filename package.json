@@ -59,7 +59,8 @@
   },
 
 "overrides": {
-    "@tailwindcss/oxide": "@tailwindcss/oxide-linux-x64-gnu"
+    "@tailwindcss/oxide": "@tailwindcss/oxide-linux-x64-gnu",
+    "@tailwindcss/oxide-win32-x64-msvc": "@tailwindcss/oxide-linux-x64-gnu"
   },
 
   "devDependencies": {
